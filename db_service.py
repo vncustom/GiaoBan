@@ -79,23 +79,31 @@ def init_db():
             )
         """)
 
-        # Bảng Directives - Chỉ đạo TGĐ & Kết luận
+        # Bảng Directives - Chỉ đạo TGĐ & Kết luận (MeetingID NULL = chỉ đạo ngoài cuộc họp)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS Directives (
                 DirectiveID INTEGER PRIMARY KEY AUTOINCREMENT,
-                MeetingID INTEGER NOT NULL,
+                MeetingID INTEGER,
                 Category TEXT NOT NULL DEFAULT 'ket_luan',
                 Content TEXT NOT NULL,
                 AssignedTo TEXT,
                 Deadline TEXT,
                 Status TEXT DEFAULT 'pending',
                 Priority INTEGER DEFAULT 0,
+                DirectiveDate TEXT,
                 CreatedBy TEXT,
                 CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (MeetingID) REFERENCES Meetings(MeetingID)
             )
         """)
+        # Migration: thêm cột DirectiveDate nếu chưa có (cho DB cũ)
+        try:
+            cursor.execute("ALTER TABLE Directives ADD COLUMN DirectiveDate TEXT")
+        except Exception:
+            pass
+        # Migration: cho phép MeetingID NULL nếu DB cũ có constraint NOT NULL
+        # SQLite không hỗ trợ ALTER COLUMN, nhưng vì đã dùng CREATE IF NOT EXISTS nên chỉ cần patch mới
 
         # Bảng Events - Sự kiện tuần/tháng
         cursor.execute("""
@@ -509,16 +517,43 @@ def create_directive(
         conn.close()
 
 
+def create_standalone_directive(
+    category: str = "y_kien_tgd",
+    content: str = "",
+    assigned_to: Optional[str] = None,
+    deadline: Optional[str] = None,
+    priority: int = 0,
+    directive_date: Optional[str] = None,
+    created_by: Optional[str] = None,
+) -> int:
+    """Thêm chỉ đạo ngoài cuộc họp (Ban Tổng Giám đốc)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if not directive_date:
+            directive_date = datetime.date.today().strftime("%Y-%m-%d")
+        cursor.execute(
+            """INSERT INTO Directives (MeetingID, Category, Content, AssignedTo, Deadline, Priority, DirectiveDate, CreatedBy)
+            VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)""",
+            (category, content, assigned_to, deadline, priority, directive_date, created_by),
+        )
+        directive_id = cursor.lastrowid
+        conn.commit()
+        return directive_id
+    finally:
+        conn.close()
+
+
 def get_directives(
     meeting_id: Optional[int] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Lấy danh sách chỉ đạo."""
+    """Lấy danh sách chỉ đạo (của 1 cuộc họp cụ thể)."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        query = "SELECT d.*, m.MeetingDate FROM Directives d LEFT JOIN Meetings m ON d.MeetingID = m.MeetingID WHERE 1=1"
+        query = "SELECT d.*, m.MeetingDate FROM Directives d LEFT JOIN Meetings m ON d.MeetingID = m.MeetingID WHERE d.MeetingID IS NOT NULL"
         params = []
         if meeting_id is not None:
             query += " AND d.MeetingID = ?"
@@ -599,23 +634,28 @@ def get_directives_filtered(
     category: Optional[str] = None,
     limit: int = 200,
 ) -> List[Dict[str, Any]]:
-    """Lấy danh sách chỉ đạo có hỗ trợ lọc linh hoạt theo ngày và ban."""
+    """Lấy danh sách chỉ đạo có hỗ trợ lọc linh hoạt theo ngày và ban.
+    Bao gồm cả chỉ đạo ngoài cuộc họp (MeetingID IS NULL)."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # Dùng COALESCE để lấy ngày: ưu tiên MeetingDate từ cuộc họp, fallback DirectiveDate
         query = """
-            SELECT d.*, m.MeetingDate, m.Chairman, m.Location
+            SELECT d.*,
+                   COALESCE(m.MeetingDate, d.DirectiveDate) AS MeetingDate,
+                   m.Chairman, m.Location,
+                   CASE WHEN d.MeetingID IS NULL THEN 1 ELSE 0 END AS IsStandalone
             FROM Directives d
-            JOIN Meetings m ON d.MeetingID = m.MeetingID
+            LEFT JOIN Meetings m ON d.MeetingID = m.MeetingID
             WHERE 1=1
         """
         params = []
 
         if start_date:
-            query += " AND m.MeetingDate >= ?"
+            query += " AND COALESCE(m.MeetingDate, d.DirectiveDate) >= ?"
             params.append(start_date)
         if end_date:
-            query += " AND m.MeetingDate <= ?"
+            query += " AND COALESCE(m.MeetingDate, d.DirectiveDate) <= ?"
             params.append(end_date)
         if department and department.strip():
             query += " AND (d.AssignedTo LIKE ? OR d.AssignedTo = ?)"
@@ -625,7 +665,7 @@ def get_directives_filtered(
             query += " AND d.Category = ?"
             params.append(category.strip())
 
-        query += " ORDER BY m.MeetingDate DESC, d.Priority DESC, d.DirectiveID DESC LIMIT ?"
+        query += " ORDER BY COALESCE(m.MeetingDate, d.DirectiveDate) DESC, d.Priority DESC, d.DirectiveID DESC LIMIT ?"
         params.append(limit)
 
         cursor.execute(query, params)
@@ -636,7 +676,7 @@ def get_directives_filtered(
 
 
 def get_recent_directives_2days(department: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Lấy chỉ đạo TGĐ trong ngày hôm nay và hôm qua (mặc định trang chủ)."""
+    """Lấy chỉ đạo trong ngày hôm nay và hôm qua (mặc định trang chủ)."""
     today = datetime.date.today()
     yesterday = today - datetime.timedelta(days=1)
     start_str = yesterday.strftime("%Y-%m-%d")
@@ -644,7 +684,7 @@ def get_recent_directives_2days(department: Optional[str] = None) -> List[Dict[s
     
     directives = get_directives_filtered(start_date=start_str, end_date=end_str, department=department)
     if not directives:
-        # Nếu hôm nay và hôm qua chưa có cuộc họp (ví dụ đầu tuần/sau nghỉ lễ), fallback 7 ngày gần nhất
+        # Nếu hôm nay và hôm qua chưa có dữ liệu (đầu tuần/sau nghỉ lễ), fallback 7 ngày gần nhất
         directives = get_directives_filtered(
             start_date=(today - datetime.timedelta(days=7)).strftime("%Y-%m-%d"),
             end_date=end_str,
@@ -654,14 +694,41 @@ def get_recent_directives_2days(department: Optional[str] = None) -> List[Dict[s
 
 
 def get_today_directives() -> List[Dict[str, Any]]:
-    """Lấy chỉ đạo TGĐ (mặc định hôm nay & hôm qua)."""
+    """Lấy chỉ đạo (mặc định hôm nay & hôm qua)."""
     return get_recent_directives_2days()
 
 
 def get_recent_directives(days: int = 7, department: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Lấy chỉ đạo TGĐ trong N ngày gần nhất."""
+    """Lấy chỉ đạo trong N ngày gần nhất."""
     from_date = (datetime.date.today() - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
     return get_directives_filtered(start_date=from_date, department=department)
+
+
+def update_standalone_directive(directive_id: int, **kwargs) -> bool:
+    """Cập nhật chỉ đạo ngoài cuộc họp (bao gồm DirectiveDate)."""
+    if not kwargs:
+        return False
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        set_parts = []
+        params = []
+        allowed_fields = ["Content", "AssignedTo", "Deadline", "Status", "Priority", "Category", "DirectiveDate"]
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                set_parts.append(f"{key} = ?")
+                params.append(value)
+        if not set_parts:
+            return False
+        set_parts.append("UpdatedAt = CURRENT_TIMESTAMP")
+        params.append(directive_id)
+        query = f"UPDATE Directives SET {', '.join(set_parts)} WHERE DirectiveID = ?"
+        cursor.execute(query, params)
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
+    finally:
+        conn.close()
 
 
 # ===================== EVENTS =====================

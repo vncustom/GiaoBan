@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Ban HTV</title>
     <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
-    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
     <!-- Script chống flash trắng/đen khi load -->
     <script>
         (function() {
@@ -80,9 +80,11 @@
                 <div class="hero-header">
                     <div class="hero-title">
                         <div class="icon">📌</div>
-                        <h2>Chỉ đạo Tổng Giám đốc</h2>
+                        <h2>Chỉ đạo Ban Tổng Giám đốc</h2>
                         <span class="date-badge" id="directiveDateBadge">Hôm nay & Hôm qua</span>
                     </div>
+                    <!-- Nút thêm chỉ đạo ngoài họp (chỉ BanTGD/Admin mới thấy) -->
+                    <button class="btn btn-sm btn-primary" id="addStandaloneDirectiveBtn" style="display: none;">+ Thêm chỉ đạo</button>
                 </div>
 
                 <!-- Thanh công cụ lọc Chỉ đạo Ban TGĐ -->
@@ -458,6 +460,85 @@
         </div>
     </div>
 
+    <!-- Standalone Directive Modal (Chỉ đạo ngoài cuộc họp) -->
+    <div class="modal-overlay" id="standaloneDirectiveModal">
+        <div class="modal" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 id="standaloneDirectiveModalTitle">Thêm chỉ đạo ngoài cuộc họp</h3>
+                <button class="modal-close" onclick="closeModal('standaloneDirectiveModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="standaloneDirectiveForm">
+                    <input type="hidden" id="sdDirectiveId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Phân loại</label>
+                            <select class="form-select" id="sdCategory">
+                                <option value="y_kien_tgd">Ý kiến Ban TGĐ</option>
+                                <option value="ket_luan">Kết luận</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Giao cho (đơn vị)</label>
+                            <select class="form-select" id="sdAssignedTo">
+                                <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                <option value="Ban Chương trình">Ban Chương trình</option>
+                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nội dung chỉ đạo *</label>
+                        <textarea class="form-textarea" id="sdContent" rows="6" placeholder="Nhập nội dung chỉ đạo..." required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Ngày chỉ đạo *</label>
+                            <input type="date" class="form-input" id="sdDirectiveDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Hạn hoàn thành (nếu có)</label>
+                            <input type="date" class="form-input" id="sdDeadline">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mức ưu tiên</label>
+                        <select class="form-select" id="sdPriority">
+                            <option value="0">Bình thường</option>
+                            <option value="1">Quan trọng</option>
+                            <option value="2">Khẩn cấp</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('standaloneDirectiveModal')">Hủy</button>
+                <button class="btn btn-primary" id="standaloneDirectiveFormSubmit">Lưu chỉ đạo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- User Management Modal -->
     <div class="modal-overlay" id="userMgmtModal">
         <div class="modal" style="max-width: 750px;">
@@ -516,6 +597,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/app.js?v=3"></script>
 </body>
 </html>

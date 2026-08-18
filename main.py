@@ -221,6 +221,19 @@ class DirectiveUpdateRequest(BaseModel):
     status: Optional[str] = None
     priority: Optional[int] = None
     category: Optional[str] = None
+    directive_date: Optional[str] = Field(None, alias="directiveDate")
+
+    class Config:
+        populate_by_name = True
+
+
+class StandaloneDirectiveCreateRequest(BaseModel):
+    category: str = "y_kien_tgd"
+    content: str
+    assigned_to: Optional[str] = Field(None, alias="assignedTo")
+    deadline: Optional[str] = None
+    priority: int = 0
+    directive_date: Optional[str] = Field(None, alias="directiveDate")
 
     class Config:
         populate_by_name = True
@@ -576,9 +589,78 @@ def api_get_all_directives(
         return db_service.get_recent_directives_2days(department=department)
 
 
+@app.post("/api/directives")
+def api_create_standalone_directive(req: StandaloneDirectiveCreateRequest, request: Request):
+    """API tạo chỉ đạo ngoài cuộc họp (Ban Tổng Giám đốc)."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+    if not is_vpd_user(user.get("role", ""), user.get("department", "")):
+        raise HTTPException(status_code=403, detail="Chỉ Ban Tổng Giám đốc hoặc Admin mới có quyền thêm chỉ đạo ngoài cuộc họp.")
+
+    directive_date = req.directive_date or None
+    if directive_date:
+        directive_date = parse_date(directive_date)
+
+    directive_id = db_service.create_standalone_directive(
+        category=req.category,
+        content=req.content,
+        assigned_to=req.assigned_to,
+        deadline=parse_date(req.deadline) if req.deadline else None,
+        priority=req.priority,
+        directive_date=directive_date,
+        created_by=user.get("username"),
+    )
+    return {"success": True, "message": "Thêm chỉ đạo thành công!", "directive_id": directive_id}
+
+
+@app.put("/api/directives/{directive_id}")
+def api_update_standalone_directive(directive_id: int, req: DirectiveUpdateRequest, request: Request):
+    """API sửa chỉ đạo ngoài cuộc họp."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+    if not is_vpd_user(user.get("role", ""), user.get("department", "")):
+        raise HTTPException(status_code=403, detail="Không có quyền sửa chỉ đạo này.")
+
+    update_data = {}
+    if req.content is not None:
+        update_data["Content"] = req.content
+    if req.assigned_to is not None:
+        update_data["AssignedTo"] = req.assigned_to
+    if req.deadline is not None:
+        update_data["Deadline"] = parse_date(req.deadline) if req.deadline else None
+    if req.status is not None:
+        update_data["Status"] = req.status
+    if req.priority is not None:
+        update_data["Priority"] = req.priority
+    if req.category is not None:
+        update_data["Category"] = req.category
+    if req.directive_date is not None:
+        update_data["DirectiveDate"] = parse_date(req.directive_date) if req.directive_date else None
+
+    success = db_service.update_standalone_directive(directive_id, **update_data)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy chỉ đạo.")
+    return {"success": True, "message": "Cập nhật chỉ đạo thành công!"}
+
+
+@app.delete("/api/directives/{directive_id}")
+def api_delete_standalone_directive(directive_id: int, request: Request):
+    """API xóa chỉ đạo ngoài cuộc họp."""
+    user = get_current_user(request)
+    if not is_vpd_user(user.get("role", ""), user.get("department", "")):
+        raise HTTPException(status_code=403, detail="Không có quyền xóa chỉ đạo này.")
+    success = db_service.delete_directive(directive_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy chỉ đạo.")
+    return {"success": True, "message": "Xóa chỉ đạo thành công!"}
+
+
+
 @app.get("/api/directives/today")
 def api_get_today_directives(department: Optional[str] = None):
-    """Lấy chỉ đạo TGĐ (mặc định hôm nay & hôm qua)."""
+    """Lấy chỉ đạo (mặc định hôm nay & hôm qua)."""
     return db_service.get_recent_directives_2days(department=department)
 
 

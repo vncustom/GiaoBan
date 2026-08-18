@@ -99,6 +99,9 @@ function showLoggedIn(user) {
     document.getElementById('adminUserMgmtBtn').style.display = isAdmin ? '' : 'none';
     document.getElementById('addMeetingBtn').style.display = isVPD ? '' : 'none';
     document.getElementById('addEventBtn').style.display = isVPD ? '' : 'none';
+    // Nút thêm chỉ đạo ngoài họp: BanTGD và Admin
+    const canAddStandalone = isAdmin || user.role === 'BanTGD';
+    document.getElementById('addStandaloneDirectiveBtn').style.display = canAddStandalone ? '' : 'none';
 
     // Tải lại biên bản để hiện các nút chức năng phù hợp
     loadMeetings();
@@ -110,6 +113,7 @@ function showLoggedOut() {
     document.getElementById('adminUserMgmtBtn').style.display = 'none';
     document.getElementById('addMeetingBtn').style.display = 'none';
     document.getElementById('addEventBtn').style.display = 'none';
+    document.getElementById('addStandaloneDirectiveBtn').style.display = 'none';
 }
 
 function isVpdDept(dept) {
@@ -157,6 +161,10 @@ function bindEvents() {
     // Events
     document.getElementById('addEventBtn').addEventListener('click', () => openEventModal());
     document.getElementById('eventFormSubmit').addEventListener('click', handleEventSubmit);
+
+    // Standalone Directive (Chỉ đạo ngoài họp)
+    document.getElementById('addStandaloneDirectiveBtn').addEventListener('click', () => openStandaloneDirectiveModal());
+    document.getElementById('standaloneDirectiveFormSubmit').addEventListener('click', handleStandaloneDirectiveSubmit);
 
     // User Management
     document.getElementById('adminUserMgmtBtn').addEventListener('click', () => { openModal('userMgmtModal'); loadUsers(); });
@@ -356,6 +364,11 @@ function renderHeroDirectives(directives) {
 
         items.forEach((d, i) => {
             const categoryLabel = d.Category === 'y_kien_tgd' ? 'Ý kiến Ban TGĐ' : 'Kết luận cuộc họp';
+            const isStandalone = d.IsStandalone === 1 || d.MeetingID === null || d.MeetingID === undefined;
+            const sourceLabel = isStandalone
+                ? '<span class="directive-tag" style="background:var(--accent-purple-light);color:var(--accent-purple);font-size:0.7rem;">Chỉ đạo ngoài họp</span>'
+                : '<span class="directive-tag" style="background:var(--accent-cyan-light);color:var(--accent-cyan);font-size:0.7rem;">Họp giao ban tuyên truyền hàng ngày</span>';
+            const canEditStandalone = isStandalone && isVpdUser();
 
             html += `
             <li class="directive-item" style="animation-delay: ${i * 0.05}s">
@@ -365,9 +378,15 @@ function renderHeroDirectives(directives) {
                     <span>${formatContent(d.Content)}</span>
                     <div class="directive-meta">
                         <span class="directive-tag" style="background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">${categoryLabel}</span>
+                        ${sourceLabel}
                         ${d.Deadline ? `<span class="directive-tag" style="background: var(--accent-red-light); color: var(--accent-red); font-weight:600;">Hạn: ${formatDbDateVi(d.Deadline)}</span>` : ''}
                         ${d.Priority > 0 ? `<span class="directive-tag" style="background: var(--accent-amber-light); color: var(--accent-amber); font-weight:600;">${d.Priority >= 2 ? 'Khẩn cấp' : 'Quan trọng'}</span>` : ''}
                     </div>
+                    ${canEditStandalone ? `
+                    <div class="report-actions" style="margin-top:6px">
+                        <button class="btn btn-xs btn-secondary" onclick="editStandaloneDirective(${d.DirectiveID})">✎ Sửa</button>
+                        <button class="btn btn-xs btn-secondary" onclick="deleteStandaloneDirective(${d.DirectiveID})">✕ Xóa</button>
+                    </div>` : ''}
                 </div>
             </li>`;
         });
@@ -430,12 +449,26 @@ function renderEvents(events) {
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
                 <span class="event-type-badge ${typeClass}">${typeLabel}</span>
-                ${isVpdUser() ? `<button class="btn-icon btn-xs" onclick="deleteEvent(${ev.EventID})" title="Xóa sự kiện">✕</button>` : ''}
+                ${isVpdUser() ? `
+                <button class="btn-icon btn-xs" onclick="editEventById(${ev.EventID})" title="Sửa sự kiện">✎</button>
+                <button class="btn-icon btn-xs" onclick="deleteEvent(${ev.EventID})" title="Xóa sự kiện">✕</button>
+                ` : ''}
             </div>
         </div>`;
     });
 
     grid.innerHTML = html;
+}
+
+async function editEventById(eventId) {
+    try {
+        // Lấy thông tin event từ danh sách hiện tại (trên DOM)
+        const resp = await fetch(`/api/events?start_date=2020-01-01&end_date=2099-12-31`);
+        const events = await resp.json();
+        const ev = events.find(e => e.EventID === eventId);
+        if (ev) openEventModal(ev);
+        else showToast('Không tìm thấy sự kiện', 'error');
+    } catch (e) { showToast('Lỗi tải sự kiện', 'error'); }
 }
 
 function openEventModal(event) {
@@ -1036,6 +1069,102 @@ async function deleteDirective(meetingId, directiveId) {
             card.classList.remove('expanded');
             toggleMeeting(meetingId);
         }
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+// ===================== STANDALONE DIRECTIVE CRUD =====================
+function openStandaloneDirectiveModal(directive) {
+    document.getElementById('sdDirectiveId').value = directive ? directive.DirectiveID : '';
+    document.getElementById('sdCategory').value = directive ? directive.Category : 'y_kien_tgd';
+    document.getElementById('sdContent').value = directive ? directive.Content : '';
+    document.getElementById('sdDirectiveDate').value = directive ? (directive.DirectiveDate || toDbDate(new Date())) : toDbDate(new Date());
+    document.getElementById('sdDeadline').value = directive ? (directive.Deadline || '') : '';
+    document.getElementById('sdPriority').value = directive ? (directive.Priority || 0) : 0;
+    
+    // Giao cho
+    const assignedSelect = document.getElementById('sdAssignedTo');
+    const assignedVal = directive ? (directive.AssignedTo || '') : '';
+    if (assignedVal) {
+        let matched = false;
+        for (let i = 0; i < assignedSelect.options.length; i++) {
+            if (assignedSelect.options[i].value.toLowerCase() === assignedVal.toLowerCase()) {
+                assignedSelect.selectedIndex = i;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) {
+            const opt = new Option(assignedVal, assignedVal);
+            assignedSelect.add(opt);
+            assignedSelect.value = assignedVal;
+        }
+    } else {
+        assignedSelect.value = '';
+    }
+
+    document.getElementById('standaloneDirectiveModalTitle').textContent = directive ? 'Sửa chỉ đạo ngoài họp' : 'Thêm chỉ đạo ngoài họp';
+    openModal('standaloneDirectiveModal');
+}
+
+async function editStandaloneDirective(directiveId) {
+    // Lấy thông tin directive từ API directives hiện tại
+    try {
+        const resp = await fetch('/api/directives?mode=all');
+        const directives = await resp.json();
+        const d = directives.find(x => x.DirectiveID === directiveId && (x.IsStandalone === 1 || x.MeetingID === null || x.MeetingID === undefined));
+        if (d) openStandaloneDirectiveModal(d);
+        else showToast('Không tìm thấy chỉ đạo', 'error');
+    } catch (e) { showToast('Lỗi tải chỉ đạo', 'error'); }
+}
+
+async function handleStandaloneDirectiveSubmit() {
+    const directiveId = document.getElementById('sdDirectiveId').value;
+    const data = {
+        category: document.getElementById('sdCategory').value,
+        content: document.getElementById('sdContent').value.trim(),
+        assignedTo: document.getElementById('sdAssignedTo').value.trim() || null,
+        directiveDate: document.getElementById('sdDirectiveDate').value,
+        deadline: document.getElementById('sdDeadline').value || null,
+        priority: parseInt(document.getElementById('sdPriority').value) || 0
+    };
+
+    if (!data.content) {
+        showToast('Vui lòng nhập nội dung chỉ đạo', 'warning');
+        return;
+    }
+    if (!data.directiveDate) {
+        showToast('Vui lòng chọn ngày chỉ đạo', 'warning');
+        return;
+    }
+
+    try {
+        const url = directiveId ? `/api/directives/${directiveId}` : '/api/directives';
+        const method = directiveId ? 'PUT' : 'POST';
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        closeModal('standaloneDirectiveModal');
+        loadHeroDirectives();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+async function deleteStandaloneDirective(directiveId) {
+    if (!confirm('Bạn có chắc muốn xóa chỉ đạo này?')) return;
+    try {
+        const resp = await fetch(`/api/directives/${directiveId}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        loadHeroDirectives();
     } catch (e) {
         showToast('Lỗi kết nối', 'error');
     }
