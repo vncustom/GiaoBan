@@ -1,0 +1,32 @@
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+.venv_*/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database files (giữ sqlite db cục bộ không commit nếu cần hoặc bỏ comment nếu muốn backup)
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Log files
+*.log
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS generated files
+ehthumbs.db
+[Nn]on[Dd]istributable/

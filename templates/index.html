@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giao Ban HTV</title>
+    <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <!-- Script chống flash trắng/đen khi load -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('giaoban_theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo-section">
+                <img src="/static/logo.png" alt="Logo HTV" class="logo-img">
+                <h1>GIAO BAN HTV</h1>
+            </div>
+            
+            <div class="header-right">
+                <!-- Theme Toggle Button -->
+                <button class="theme-toggle-btn" id="themeToggleBtn" title="Chuyển đổi giao diện Sáng / Tối">
+                    <span class="theme-toggle-icon" id="themeToggleIcon">🌙</span>
+                    <span id="themeToggleText">Chế độ tối</span>
+                </button>
+
+                <!-- User Status & Login Area -->
+                <div class="auth-section">
+                    <div id="authUnlogged" class="auth-group">
+                        <button class="btn btn-primary" id="openLoginModalBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                                <polyline points="10 17 15 12 10 7"></polyline>
+                                <line x1="15" y1="12" x2="3" y2="12"></line>
+                            </svg>
+                            Đăng nhập
+                        </button>
+                    </div>
+                    <div id="authLogged" class="auth-group" style="display: none;">
+                        <div class="user-info">
+                            <span class="user-greeting">Xin chào, <strong id="loggedUsername">--</strong></span>
+                            <span class="user-role-badge" id="loggedUserRole">--</span>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="adminUserMgmtBtn" style="display: none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            Quản lý User
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="logoutBtn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            Đăng xuất
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- HERO: Chỉ đạo TGĐ (Mặc định hôm nay & hôm qua, hỗ trợ lọc theo Ban & Ngày) -->
+            <section class="hero-section" id="heroDirectives">
+                <div class="hero-header">
+                    <div class="hero-title">
+                        <div class="icon">📌</div>
+                        <h2>Chỉ đạo Tổng Giám đốc</h2>
+                        <span class="date-badge" id="directiveDateBadge">Hôm nay & Hôm qua</span>
+                    </div>
+                </div>
+
+                <!-- Thanh công cụ lọc Chỉ đạo Ban TGĐ -->
+                <div class="directive-filters">
+                    <div class="directive-filter-group">
+                        <span class="filter-label">Thời gian:</span>
+                        <button class="btn btn-sm btn-secondary active" id="heroFilter2DaysBtn" title="Xem chỉ đạo hôm nay và hôm qua">Hôm nay & Hôm qua</button>
+                        <button class="btn btn-sm btn-ghost" id="heroFilter7DaysBtn" title="Xem chỉ đạo trong 7 ngày gần nhất">7 ngày qua</button>
+                        <button class="btn btn-sm btn-ghost" id="heroFilterAllDaysBtn" title="Xem tất cả chỉ đạo từ trước đến nay">Tất cả ngày</button>
+                        <input type="date" class="form-input" id="heroFilterDate" style="width: 145px; padding: 5px 10px; font-size: 0.8rem;" title="Chọn ngày cụ thể để xem">
+                    </div>
+
+                    <div class="directive-filter-group" style="margin-left: auto;">
+                        <span class="filter-label">Đơn vị / Ban:</span>
+                        <select class="form-select" id="heroFilterDept" style="width: 220px; padding: 5px 10px; font-size: 0.8rem;">
+                            <option value="">-- Tất cả các Ban / Đơn vị --</option>
+                            <option value="Ban Chương trình">Ban Chương trình</option>
+                            <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                            <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                            <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                            <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                            <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                            <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                            <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                            <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
+                            <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                            <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                            <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                            <option value="Văn phòng">Văn phòng Đài</option>
+                            <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                            <option value="Ban Chiến lược">Ban Chiến lược</option>
+                            <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                            <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                            <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                            <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                            <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                            <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                            <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                        </select>
+                        <button class="btn btn-sm btn-ghost" id="heroResetFilterBtn" title="Đặt lại bộ lọc về mặc định" style="padding: 5px 8px;">✕ Đặt lại</button>
+                    </div>
+                </div>
+
+                <!-- Danh sách chỉ đạo -->
+                <div id="heroDirectiveContainer">
+                    <ul class="directive-list" id="heroDirectiveList">
+                        <li class="empty-state">
+                            <div class="icon">📋</div>
+                            <p>Đang tải dữ liệu chỉ đạo...</p>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Events Section -->
+            <section class="events-section" id="eventsSection">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="icon" style="background: var(--accent-purple-light); color: var(--accent-purple);">📅</div>
+                        <h2>Sự kiện sắp tới</h2>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" id="addEventBtn" style="display: none;">+ Thêm sự kiện</button>
+                </div>
+                <div class="events-grid" id="eventsGrid">
+                    <div class="empty-state">
+                        <p class="text-muted">Không có sự kiện nào sắp tới</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Meetings Section -->
+            <section class="meetings-section" id="meetingsSection">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="icon" style="background: var(--accent-cyan-light); color: var(--accent-cyan);">📋</div>
+                        <h2>Biên bản họp giao ban</h2>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <button class="btn btn-sm btn-secondary" id="addMeetingBtn" style="display: none;">+ Tạo cuộc họp mới</button>
+                    </div>
+                </div>
+
+                <div class="meetings-controls">
+                    <div class="filter-group">
+                        <input type="date" class="form-input" id="filterDate" style="width: 160px;">
+                        <button class="btn btn-sm btn-secondary" id="filterTodayBtn">Hôm nay</button>
+                        <button class="btn btn-sm btn-secondary" id="filterWeekBtn">Tuần này</button>
+                        <button class="btn btn-sm btn-secondary" id="filterMonthBtn">Tháng này</button>
+                        <button class="btn btn-sm btn-ghost" id="filterAllBtn">Tất cả</button>
+                    </div>
+                </div>
+
+                <div id="meetingsList">
+                    <div class="empty-state">
+                        <div class="icon">📂</div>
+                        <p>Chưa có cuộc họp nào</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay login-modal" id="loginModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Đăng nhập</h3>
+                <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <button class="sso-btn" id="ssoLoginBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Đăng nhập bằng HTV SSO
+                </button>
+                <div class="login-divider">hoặc đăng nhập nội bộ</div>
+                <form id="localLoginForm">
+                    <div class="form-group">
+                        <label class="form-label" for="loginUsername">Tên đăng nhập</label>
+                        <input type="text" class="form-input" id="loginUsername" placeholder="admin" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="loginPassword">Mật khẩu</label>
+                        <input type="password" class="form-input" id="loginPassword" placeholder="••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full" style="margin-top: 8px;">Đăng nhập</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meeting Modal -->
+    <div class="modal-overlay" id="meetingModal">
+        <div class="modal" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3 id="meetingModalTitle">Tạo cuộc họp mới</h3>
+                <button class="modal-close" onclick="closeModal('meetingModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="meetingForm">
+                    <input type="hidden" id="meetingFormId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Ngày họp *</label>
+                            <input type="date" class="form-input" id="mfDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Giờ bắt đầu</label>
+                            <input type="time" class="form-input" id="mfStartTime" value="08:00">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Chủ trì</label>
+                            <input type="text" class="form-input" id="mfChairman" placeholder="VD: Ông Cao Anh Minh">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Chức danh</label>
+                            <input type="text" class="form-input" id="mfChairmanTitle" placeholder="Tổng Giám đốc">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Thư ký</label>
+                            <input type="text" class="form-input" id="mfSecretary" placeholder="VD: Ông Trần Đại Nghĩa">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Chức danh thư ký</label>
+                            <input type="text" class="form-input" id="mfSecretaryTitle" placeholder="Chánh Văn phòng Đài">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Địa điểm</label>
+                        <input type="text" class="form-input" id="mfLocation" value="Phòng họp Giao ban Đài Phát thanh và Truyền hình Thành phố">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Thành phần tham dự</label>
+                        <textarea class="form-textarea" id="mfAttendees" rows="3" placeholder="Ban Tổng Giám đốc; Các đơn vị: Văn phòng; Ban Tổ chức - Đào tạo..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('meetingModal')">Hủy</button>
+                <button class="btn btn-primary" id="meetingFormSubmit">Lưu cuộc họp</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div class="modal-overlay" id="reportModal">
+        <div class="modal" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 id="reportModalTitle">Thêm báo cáo</h3>
+                <button class="modal-close" onclick="closeModal('reportModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="reportForm">
+                    <input type="hidden" id="rfMeetingId">
+                    <input type="hidden" id="rfReportId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Đơn vị báo cáo *</label>
+                            <select class="form-select" id="rfDepartment" required>
+                                <option value="">-- Chọn đơn vị --</option>
+                                <option value="Ban Chương trình">Ban Chương trình</option>
+                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
+                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                <option value="Văn phòng">Văn phòng Đài</option>
+                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Loại báo cáo</label>
+                            <select class="form-select" id="rfCategory">
+                                <option value="noi_dung">Nội dung & Tuyên truyền</option>
+                                <option value="dieu_hanh">Điều hành chung</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nội dung báo cáo *</label>
+                        <textarea class="form-textarea" id="rfContent" rows="8" placeholder="Nhập nội dung báo cáo của đơn vị...&#10;&#10;VD:&#10;+ Kênh HTV9: Phát phim tài liệu...&#10;+ Kênh HTV7: Chương trình giải trí..." required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('reportModal')">Hủy</button>
+                <button class="btn btn-primary" id="reportFormSubmit">Lưu báo cáo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Directive Modal -->
+    <div class="modal-overlay" id="directiveModal">
+        <div class="modal" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 id="directiveModalTitle">Thêm chỉ đạo / kết luận</h3>
+                <button class="modal-close" onclick="closeModal('directiveModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="directiveForm">
+                    <input type="hidden" id="dfMeetingId">
+                    <input type="hidden" id="dfDirectiveId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Phân loại</label>
+                            <select class="form-select" id="dfCategory">
+                                <option value="ket_luan">Kết luận cuộc họp</option>
+                                <option value="y_kien_tgd">Ý kiến Ban TGĐ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Giao cho (đơn vị)</label>
+                            <select class="form-select" id="dfAssignedTo">
+                                <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                <option value="Ban Chương trình">Ban Chương trình</option>
+                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nội dung chỉ đạo *</label>
+                        <textarea class="form-textarea" id="dfContent" rows="6" placeholder="Nhập nội dung chỉ đạo, kết luận..." required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Hạn hoàn thành (nếu có)</label>
+                            <input type="date" class="form-input" id="dfDeadline">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mức ưu tiên</label>
+                            <select class="form-select" id="dfPriority">
+                                <option value="0">Bình thường</option>
+                                <option value="1">Quan trọng</option>
+                                <option value="2">Khẩn cấp</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('directiveModal')">Hủy</button>
+                <button class="btn btn-primary" id="directiveFormSubmit">Lưu chỉ đạo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Modal -->
+    <div class="modal-overlay" id="eventModal">
+        <div class="modal" style="max-width: 560px;">
+            <div class="modal-header">
+                <h3 id="eventModalTitle">Thêm sự kiện</h3>
+                <button class="modal-close" onclick="closeModal('eventModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm">
+                    <input type="hidden" id="efEventId">
+                    <div class="form-group">
+                        <label class="form-label">Tên sự kiện *</label>
+                        <input type="text" class="form-input" id="efTitle" placeholder="VD: Lễ trao Giải thưởng Tôn Đức Thắng" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Ngày bắt đầu *</label>
+                            <input type="date" class="form-input" id="efDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ngày kết thúc</label>
+                            <input type="date" class="form-input" id="efEndDate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Loại sự kiện</label>
+                        <select class="form-select" id="efType">
+                            <option value="tuan">Sự kiện tuần</option>
+                            <option value="thang">Sự kiện tháng</option>
+                            <option value="dac_biet">Sự kiện đặc biệt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mô tả</label>
+                        <textarea class="form-textarea" id="efDescription" rows="3" placeholder="Mô tả chi tiết sự kiện..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('eventModal')">Hủy</button>
+                <button class="btn btn-primary" id="eventFormSubmit">Lưu sự kiện</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Management Modal -->
+    <div class="modal-overlay" id="userMgmtModal">
+        <div class="modal" style="max-width: 750px;">
+            <div class="modal-header">
+                <h3>Quản lý tài khoản</h3>
+                <button class="modal-close" onclick="closeModal('userMgmtModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="flex justify-between items-center mb-4">
+                    <p class="text-muted" style="font-size: 0.82rem;">Danh sách tài khoản người dùng</p>
+                    <button class="btn btn-sm btn-primary" id="addUserBtn">+ Thêm user</button>
+                </div>
+                <div id="userListContainer" style="max-height: 400px; overflow-y: auto;">
+                    <div class="loading-spinner">Đang tải...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal-overlay" id="addUserModal">
+        <div class="modal" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3>Thêm tài khoản</h3>
+                <button class="modal-close" onclick="closeModal('addUserModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="form-group">
+                        <label class="form-label">Tên đăng nhập</label>
+                        <input type="text" class="form-input" id="newUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mật khẩu</label>
+                        <input type="text" class="form-input" id="newPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vai trò</label>
+                        <select class="form-select" id="newRole">
+                            <option value="nhan_vien">Nhân viên</option>
+                            <option value="BPT">Ban Phụ trách (Trưởng/Phó ban)</option>
+                            <option value="BanTGD">Ban Tổng Giám đốc</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Đơn vị</label>
+                        <input type="text" class="form-input" id="newDepartment" placeholder="VD: Văn phòng Đài">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addUserModal')">Hủy</button>
+                <button class="btn btn-primary" id="addUserSubmit">Tạo tài khoản</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=2"></script>
+</body>
+</html>
