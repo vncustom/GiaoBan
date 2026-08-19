@@ -58,22 +58,32 @@ from htv_sso_fastapi import _login_url
 
 
 def map_sso_role(sso_role: Optional[Any]) -> str:
-    """Ánh xạ vai trò từ SSO sang ứng dụng."""
+    """Ánh xạ vai trò từ SSO sang ứng dụng.
+    
+    Bảng mapping từ SSO HTV:
+      truong_ban / pho_ban  → BPT  (Ban phụ trách của đơn vị)
+      BanTGD                → BanTGD
+      admin                 → Admin
+    """
     if not sso_role:
         return "nhan_vien"
     role_str = str(sso_role).strip().lower()
 
-    if role_str in ["04", "bantgd"] or any(
+    # Ban Tổng Giám Đốc
+    if role_str in ["bantgd"] or any(
         k in role_str for k in ["bantgd", "tgđ", "ptgđ", "ban tổng giám đốc"]
     ):
         return "BanTGD"
 
-    if role_str in ["02", "03", "bpt", "tb", "pb", "gd", "pgd"] or any(
+    # Ban Phụ Trách (trưởng ban, phó ban của mỗi đơn vị)
+    if role_str in ["truong_ban", "pho_ban", "02", "03", "bpt", "tb", "pb", "gd", "pgd"] or any(
         k in role_str
         for k in [
-            "pho_ban", "truong_ban", "phó ban", "trưởng ban", "phó_ban", "trưởng_ban",
-            "giam doc", "giám đốc", "giam_doc", "giám_đốc", "phó giám đốc", "phó_giám_đốc",
-            "trường ban", "pho giam doc", "bpt",
+            "truong_ban", "pho_ban", "trưởng_ban", "phó_ban",
+            "trưởng ban", "phó ban",
+            "giam doc", "giám đốc", "giam_doc", "giám_đốc",
+            "phó giám đốc", "phó_giám_đốc",
+            "pho giam doc", "bpt",
         ]
     ):
         return "BPT"

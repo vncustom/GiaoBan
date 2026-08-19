@@ -137,8 +137,13 @@ def init_sso(app: FastAPI, secret_key: str, sso_server_url: str,
                 return RedirectResponse(url=_login_url(request), status_code=302)
 
             try:
-                # Thêm leeway=60 để bù trừ lệch múi giờ/đồng hồ (clock skew) giữa 2 máy
-                payload = jwt.decode(token, secret_key, algorithms=["HS256"], leeway=60)
+                # leeway=300 để bù trừ lệch đồng hồ (clock skew) lên đến 5 phút giữa server SSO và server app
+                # options={"verify_iat": False} bỏ qua lỗi "not yet valid (iat)" do lệch giờ
+                payload = jwt.decode(
+                    token, secret_key, algorithms=["HS256"],
+                    leeway=300,
+                    options={"verify_iat": False}
+                )
                 print(f"[SSO DEBUG] Giai ma Token thanh cong! Payload: {payload}")
             except jwt.ExpiredSignatureError as e:
                 print(f"[SSO DEBUG] Loi: Token da het han (ExpiredSignatureError): {e}")
