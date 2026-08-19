@@ -1213,3 +1213,247 @@ header {
 .justify-between { justify-content: space-between; }
 .flex-1 { flex: 1; }
 .w-full { width: 100%; }
+
+/* ============================ PROPAGANDA PLANS ============================ */
+.propaganda-section { 
+    background: linear-gradient(135deg, #fffbf5 0%, #fff4e6 100%); 
+    border: 1px solid #ffd8a8; 
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+[data-theme="dark"] .propaganda-section { 
+    background: linear-gradient(135deg, #1c1408 0%, #241a0b 100%); 
+    border-color: #663c00; 
+}
+
+/* Nút Xuất Excel */
+.btn-excel {
+    background: #2e7d32;
+    color: #ffffff;
+    border: 1px solid #1b5e20;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    transition: var(--transition);
+}
+.btn-excel:hover {
+    background: #1b5e20;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3);
+    transform: translateY(-1px);
+}
+[data-theme="dark"] .btn-excel {
+    background: #1e5a22;
+    border-color: #2e7d32;
+}
+[data-theme="dark"] .btn-excel:hover {
+    background: #2e7d32;
+}
+
+/* Container cuộn cho danh sách kế hoạch tuyên truyền */
+.propaganda-scroll-container {
+    max-height: 490px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+    margin-top: 12px;
+}
+
+/* Custom Scrollbar */
+.propaganda-scroll-container::-webkit-scrollbar {
+    width: 6px;
+}
+.propaganda-scroll-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+}
+.propaganda-scroll-container::-webkit-scrollbar-thumb {
+    background: #f59e0b;
+    border-radius: 4px;
+}
+.propaganda-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #d97706;
+}
+[data-theme="dark"] .propaganda-scroll-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="dark"] .propaganda-scroll-container::-webkit-scrollbar-thumb {
+    background: #b45309;
+}
+
+/* Grid Kế hoạch */
+.propaganda-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+/* Card Kế hoạch Tuyên truyền - Thiết kế thanh bar ngang */
+.propaganda-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid #ffd8a8;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-theme="dark"] .propaganda-card {
+    background: #201b13;
+    border-color: #5c3708;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.propaganda-card:hover {
+    transform: translateY(-3px);
+    border-color: #f59e0b;
+    box-shadow: 0 8px 20px rgba(230, 81, 0, 0.12);
+}
+[data-theme="dark"] .propaganda-card:hover {
+    border-color: #f59e0b;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* 1. Thanh bar ngang trên cùng (Ngày tháng + Actions) */
+.propaganda-card-topbar {
+    background: linear-gradient(135deg, #e65100 0%, #f57c00 100%);
+    color: #ffffff;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.propaganda-date-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    flex-wrap: wrap;
+}
+.propaganda-cal-icon {
+    font-size: 0.9rem;
+}
+.propaganda-date-text {
+    letter-spacing: 0.01em;
+}
+.propaganda-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+.propaganda-card-actions .btn-icon {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+}
+.propaganda-card-actions .btn-icon:hover {
+    background: rgba(255, 255, 255, 0.45);
+    color: #ffffff;
+}
+.propaganda-card-actions .btn-danger:hover {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+/* 2. Thân Card */
+.propaganda-card-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.propaganda-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.45;
+}
+
+.propaganda-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.propaganda-tag {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.propaganda-tag.unit {
+    background: #fff3e0;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+.propaganda-tag.coop {
+    background: #f3f4f6;
+    color: #4b5563;
+    border: 1px solid #e5e7eb;
+}
+[data-theme="dark"] .propaganda-tag.unit {
+    background: rgba(217, 119, 6, 0.18);
+    color: #fbbf24;
+    border-color: rgba(217, 119, 6, 0.35);
+}
+[data-theme="dark"] .propaganda-tag.coop {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d1d5db;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.propaganda-meta-item {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    line-height: 1.4;
+}
+.propaganda-meta-item .icon {
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.propaganda-meta-item .text {
+    flex: 1;
+    word-break: break-word;
+}
+
+/* Days badge */
+.days-badge { 
+    display: inline-block; 
+    padding: 1px 7px; 
+    border-radius: 12px; 
+    font-size: 0.68rem; 
+    font-weight: 700; 
+    letter-spacing: 0.01em;
+}
+.days-badge.today { background: #fee2e2; color: #b91c1c; }
+.days-badge.soon { background: #fef3c7; color: #b45309; }
+.days-badge.upcoming { background: #dcfce7; color: #15803d; }
+[data-theme="dark"] .days-badge.today { background: rgba(220,38,38,.25); color: #fca5a5; }
+[data-theme="dark"] .days-badge.soon { background: rgba(217,119,6,.25); color: #fcd34d; }
+[data-theme="dark"] .days-badge.upcoming { background: rgba(22,163,74,.25); color: #86efac; }
+

@@ -139,6 +139,46 @@
                 </div>
             </section>
 
+            <!-- Propaganda Plans Section -->
+            <section class="events-section propaganda-section" id="propagandaSection">
+                <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
+                    <div class="section-title">
+                        <div class="icon" style="background: #fff3e0; color: #e65100;">📣</div>
+                        <h2>Kế hoạch tuyên truyền</h2>
+                    </div>
+
+                    <!-- Bộ lọc theo thời gian: Tháng này (mặc định), Tuần này, Tất cả -->
+                    <div class="filter-group propaganda-filters">
+                        <button class="btn btn-sm btn-secondary active" id="ppFilterMonthBtn">Tháng này</button>
+                        <button class="btn btn-sm btn-ghost" id="ppFilterWeekBtn">Tuần này</button>
+                        <button class="btn btn-sm btn-ghost" id="ppFilterAllBtn">Tất cả</button>
+                    </div>
+
+                    <!-- Thao tác: Xuất Excel + Thêm kế hoạch -->
+                    <div class="flex gap-2 items-center" style="margin-left: auto;">
+                        <button class="btn btn-sm btn-excel" id="exportPropagandaBtn" title="Xuất danh sách kế hoạch ra file Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="8" y1="13" x2="16" y2="13"></line>
+                                <line x1="8" y1="17" x2="16" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            Xuất Excel
+                        </button>
+                        <button class="btn btn-sm btn-primary" id="addPropagandaBtn" style="display: none;">+ Thêm kế hoạch</button>
+                    </div>
+                </div>
+
+                <div class="propaganda-scroll-container">
+                    <div class="propaganda-grid" id="propagandaGrid">
+                        <div class="empty-state">
+                            <p class="text-muted">Không có kế hoạch tuyên truyền nào</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Events Section -->
             <section class="events-section" id="eventsSection">
                 <div class="section-header">
@@ -411,6 +451,94 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('directiveModal')">Hủy</button>
                 <button class="btn btn-primary" id="directiveFormSubmit">Lưu chỉ đạo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Propaganda Plan Modal -->
+    <div class="modal-overlay" id="propagandaModal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 id="propagandaModalTitle">Thêm kế hoạch tuyên truyền</h3>
+                <button class="modal-close" onclick="closeModal('propagandaModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="propagandaForm">
+                    <input type="hidden" id="ppPlanId">
+                    <div class="form-group">
+                        <label class="form-label">Tên hoạt động *</label>
+                        <input type="text" class="form-input" id="ppActivityName"
+                            placeholder="VD: Lễ kỷ niệm 80 năm ngày thành lập Đài" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Ngày bắt đầu *</label>
+                            <input type="date" class="form-input" id="ppPlanDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ngày kết thúc</label>
+                            <input type="date" class="form-input" id="ppPlanEndDate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Thời gian</label>
+                        <input type="text" class="form-input" id="ppEventTime"
+                            placeholder="VD: Dự kiến 08 giờ ngày 17/7/2026">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Danh nghĩa tổ chức</label>
+                            <input type="text" class="form-input" id="ppOrganizer"
+                                placeholder="VD: UBND TP.HCM">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Đơn vị thực hiện</label>
+                            <input type="text" class="form-input" id="ppExecutingUnit"
+                                placeholder="VD: Sở Giáo dục và Đào tạo">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Địa điểm</label>
+                        <input type="text" class="form-input" id="ppLocation"
+                            placeholder="VD: Hội trường UBND TP">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Phân công đơn vị HTV</label>
+                            <input type="text" class="form-input" id="ppAssignedUnit"
+                                placeholder="VD: Trung tâm Tin tức">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Đơn vị phối hợp</label>
+                            <input type="text" class="form-input" id="ppCooperatingUnit"
+                                placeholder="VD: TT Sản xuất chương trình">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ghi chú</label>
+                        <textarea class="form-textarea" id="ppNotes" rows="2"
+                            placeholder="Ghi chú thêm nếu cần..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('propagandaModal')">Hủy</button>
+                <button class="btn btn-primary" id="propagandaFormSubmit">Lưu kế hoạch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Propaganda Plan Detail Modal -->
+    <div class="modal-overlay" id="propagandaDetailModal">
+        <div class="modal" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 id="ppDetailTitle" style="color: #e65100;">📣 Chi tiết kế hoạch tuyên truyền</h3>
+                <button class="modal-close" onclick="closeModal('propagandaDetailModal')">✕</button>
+            </div>
+            <div class="modal-body" id="ppDetailBody">
+            </div>
+            <div class="modal-footer" id="ppDetailFooter">
+                <button class="btn btn-secondary" onclick="closeModal('propagandaDetailModal')">Đóng</button>
             </div>
         </div>
     </div>

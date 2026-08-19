@@ -13,6 +13,15 @@ const ROLE_LABELS = {
     'BPT': 'Ban Phụ trách',
     'nhan_vien': 'Nhân viên'
 };
+const VAI_TRO_LABELS = {
+    'BanTGD':     'Ban Tổng Giám đốc',
+    'truong_ban': 'Trưởng đơn vị',
+    'pho_ban':    'Phó đơn vị',
+    'truong_phong':'Trưởng phòng',
+    'Pho_phong':  'Phó phòng',
+    'nhan_vien':  'Nhân viên',
+    'Admin':      'Quản trị viên',
+};
 
 // Filter state cho Chỉ đạo TGĐ
 let heroDirectiveFilter = {
@@ -26,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     checkAuth();
     loadHeroDirectives();
+    loadPropagandaPlans();
     loadEvents();
     loadMeetings();
     bindEvents();
@@ -89,19 +99,22 @@ function showLoggedIn(user) {
     document.getElementById('loggedUsername').textContent = user.full_name || user.username;
     
     const badge = document.getElementById('loggedUserRole');
-    badge.textContent = ROLE_LABELS[user.role] || user.role;
-    badge.className = 'user-role-badge ' + (user.role || '').toLowerCase();
+    // Hiển thị nhãn thân thiện hơn cho SSO vai_tro
+    const displayLabel = ROLE_LABELS[user.role] || VAI_TRO_LABELS[user.vai_tro] || user.vai_tro || user.role || 'Nhân viên';
+    const badgeKey = (user.vai_tro || user.role || '').toLowerCase().replace(/_/g, '-');
+    badge.textContent = displayLabel;
+    badge.className = 'user-role-badge ' + badgeKey;
 
-    // Phân quyền hiển thị
-    const isAdmin = user.role === 'Admin';
-    const isVPD = isAdmin || user.role === 'BanTGD' || (user.role === 'BPT' && isVpdDept(user.department));
+    // Phân quyền hiển thị — dùng isAdminUser(), isBanTgdUser() và isVpdUser() sau khi currentUser đã set
+    const isAdmin  = isAdminUser();
+    const isVPD    = isVpdUser();
+    const canStandalone = isAdmin || isBanTgdUser();
 
     document.getElementById('adminUserMgmtBtn').style.display = isAdmin ? '' : 'none';
     document.getElementById('addMeetingBtn').style.display = isVPD ? '' : 'none';
     document.getElementById('addEventBtn').style.display = isVPD ? '' : 'none';
-    // Nút thêm chỉ đạo ngoài họp: BanTGD và Admin
-    const canAddStandalone = isAdmin || user.role === 'BanTGD';
-    document.getElementById('addStandaloneDirectiveBtn').style.display = canAddStandalone ? '' : 'none';
+    document.getElementById('addPropagandaBtn').style.display = isVPD ? '' : 'none';
+    document.getElementById('addStandaloneDirectiveBtn').style.display = canStandalone ? '' : 'none';
 
     // Tải lại biên bản để hiện các nút chức năng phù hợp
     loadMeetings();
@@ -113,7 +126,25 @@ function showLoggedOut() {
     document.getElementById('adminUserMgmtBtn').style.display = 'none';
     document.getElementById('addMeetingBtn').style.display = 'none';
     document.getElementById('addEventBtn').style.display = 'none';
+    document.getElementById('addPropagandaBtn').style.display = 'none';
     document.getElementById('addStandaloneDirectiveBtn').style.display = 'none';
+}
+
+function isAdminUser() {
+    if (!currentUser) return false;
+    // SSO: sso_role = 'admin' (chữ thường)
+    if ((currentUser.sso_role || '').toLowerCase() === 'admin') return true;
+    // Local login: role DB = 'Admin'
+    if (currentUser.role === 'Admin') return true;
+    return false;
+}
+
+function isBanTgdUser() {
+    if (!currentUser) return false;
+    const vt = (currentUser.vai_tro || '').toLowerCase();
+    const role = (currentUser.role || '').toLowerCase();
+    const un = (currentUser.username || '').toLowerCase();
+    return vt.includes('tgd') || vt === 'bantgd' || role.includes('tgd') || role === 'bantgd' || un.includes('tgd') || un.includes('caoanhminh') || un.includes('diepbuuchi');
 }
 
 function isVpdDept(dept) {
@@ -124,15 +155,28 @@ function isVpdDept(dept) {
 
 function isVpdUser() {
     if (!currentUser) return false;
-    return currentUser.role === 'Admin' || currentUser.role === 'BanTGD' || 
-           (currentUser.role === 'BPT' && isVpdDept(currentUser.department));
+    const vt = (currentUser.vai_tro || '').toLowerCase();
+    const role = (currentUser.role || '');
+    const dept = currentUser.department || '';
+    // Admin
+    if (role === 'Admin' || (currentUser.sso_role || '').toLowerCase() === 'admin') return true;
+    // BanTGD
+    if (currentUser.vai_tro === 'BanTGD' || role === 'BanTGD') return true;
+    // BPT của Văn Phòng Đài
+    const isBPT = ['truong_ban','pho_ban','truong_phong','pho_phong'].includes(vt) || role === 'BPT';
+    return isBPT && isVpdDept(dept);
 }
 
 function canEditReport(reportDept) {
     if (!currentUser) return false;
-    if (currentUser.role === 'Admin') return true;
+    if (isAdminUser()) return true;
     if (isVpdUser()) return true;
-    if (currentUser.role === 'BPT' || currentUser.role === 'BanTGD') {
+    // BPT của bất kỳ ban nào có thể sửa báo cáo của ban mình
+    const vt = (currentUser.vai_tro || '').toLowerCase();
+    const role = (currentUser.role || '');
+    const isBPT = ['truong_ban','pho_ban','truong_phong','pho_phong'].includes(vt)
+               || role === 'BPT' || currentUser.vai_tro === 'BanTGD' || role === 'BanTGD';
+    if (isBPT) {
         const ud = (currentUser.department || '').toLowerCase();
         const rd = (reportDept || '').toLowerCase();
         return ud === rd || ud.includes(rd) || rd.includes(ud);
@@ -161,6 +205,14 @@ function bindEvents() {
     // Events
     document.getElementById('addEventBtn').addEventListener('click', () => openEventModal());
     document.getElementById('eventFormSubmit').addEventListener('click', handleEventSubmit);
+
+    // Propaganda Plans (Kế hoạch tuyên truyền)
+    document.getElementById('addPropagandaBtn').addEventListener('click', () => openPropagandaModal());
+    document.getElementById('propagandaFormSubmit').addEventListener('click', handlePropagandaSubmit);
+    document.getElementById('ppFilterMonthBtn').addEventListener('click', () => setPropagandaFilter('month'));
+    document.getElementById('ppFilterWeekBtn').addEventListener('click', () => setPropagandaFilter('week'));
+    document.getElementById('ppFilterAllBtn').addEventListener('click', () => setPropagandaFilter('all'));
+    document.getElementById('exportPropagandaBtn').addEventListener('click', handleExportPropaganda);
 
     // Standalone Directive (Chỉ đạo ngoài họp)
     document.getElementById('addStandaloneDirectiveBtn').addEventListener('click', () => openStandaloneDirectiveModal());
@@ -660,7 +712,7 @@ function renderMeetingDetail(meeting, reports, directives) {
     reportsHtml += `<div class="content-section-title"><span class="num">II.1</span> Công tác nội dung và tuyên truyền</div>`;
     if (noiDungReports.length > 0) {
         noiDungReports.forEach(r => {
-            reportsHtml += renderReportItem(r, m.MeetingID);
+            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
         });
     } else {
         reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
@@ -670,7 +722,7 @@ function renderMeetingDetail(meeting, reports, directives) {
     reportsHtml += `<div class="content-section-title mt-4"><span class="num">II.2</span> Báo cáo công tác điều hành chung</div>`;
     if (dieuHanhReports.length > 0) {
         dieuHanhReports.forEach(r => {
-            reportsHtml += renderReportItem(r, m.MeetingID);
+            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
         });
     } else {
         reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
@@ -701,9 +753,18 @@ function renderMeetingDetail(meeting, reports, directives) {
     // Action buttons
     let actionsHtml = '';
     if (currentUser && currentUser.logged_in) {
-        const canAddReport = currentUser.role === 'Admin' || currentUser.role === 'BPT' || currentUser.role === 'BanTGD';
+        const vt = (currentUser.vai_tro || '').toLowerCase();
+        const role = (currentUser.role || '');
+        // BPT của bất kỳ ban nào được thêm báo cáo (nếu chưa Published)
+        const isBPT = ['truong_ban','pho_ban','truong_phong','pho_phong'].includes(vt)
+                   || role === 'BPT' || role === 'BanTGD' || currentUser.vai_tro === 'BanTGD';
+        const canAddReport = isAdminUser() || isBPT;
+        const isPublished  = m.Status === 'Published';
+        // Sau khi công bố chỉ VPD/Admin mới được thêm
+        const canAddNow = canAddReport && (!isPublished || isVpdUser() || isAdminUser());
+
         actionsHtml = `<div class="flex gap-2 mt-4" style="padding-top:12px;border-top:1px solid var(--border-color);flex-wrap:wrap;align-items:center;">`;
-        if (canAddReport) {
+        if (canAddNow) {
             actionsHtml += `<button class="btn btn-sm btn-secondary" onclick="openReportModal(${m.MeetingID})">+ Thêm báo cáo</button>`;
         }
         if (canManage) {
@@ -714,7 +775,7 @@ function renderMeetingDetail(meeting, reports, directives) {
                 : `<button class="btn btn-sm btn-primary" onclick="updateMeetingStatus(${m.MeetingID}, 'Published')">✓ Công bố</button>`;
             actionsHtml += pubBtn;
         }
-        if (currentUser.role === 'Admin') {
+        if (isAdminUser()) {
             actionsHtml += `<button class="btn btn-sm btn-danger" onclick="deleteMeeting(${m.MeetingID}, '${m.MeetingDate}')" style="margin-left:auto;">🗑️ Xóa cuộc họp</button>`;
         }
         actionsHtml += `</div>`;
@@ -738,17 +799,20 @@ function renderMeetingDetail(meeting, reports, directives) {
     `;
 }
 
-function renderReportItem(r, meetingId) {
+function renderReportItem(r, meetingId, meetingStatus) {
     const canEdit = canEditReport(r.Department);
+    // Ẩn nút sửa/xóa nếu cuộc họp đã Published và user không phải VPD/Admin
+    const isPublished = meetingStatus === 'Published';
+    const canEditNow = canEdit && (!isPublished || isVpdUser() || isAdminUser());
     return `
     <div class="report-item">
         <div class="flex justify-between items-center">
             <span class="report-dept">${escapeHtml(r.Department)}</span>
-            ${canEdit ? `
+            ${canEditNow ? `
             <div class="report-actions">
                 <button class="btn-icon btn-xs" onclick="editReport(${meetingId}, ${r.ReportID})" title="Sửa báo cáo">✎</button>
                 <button class="btn-icon btn-xs" onclick="deleteReport(${meetingId}, ${r.ReportID})" title="Xóa báo cáo">✕</button>
-            </div>` : ''}
+            </div>` : (isPublished && canEdit ? `<span style="font-size:0.7rem;color:var(--text-muted);">🔒 Đã công bố</span>` : '')}
         </div>
         <div class="report-content">${formatContent(r.Content)}</div>
         ${r.CreatedBy ? `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">Người nhập: ${escapeHtml(r.CreatedBy)}</p>` : ''}
@@ -1165,6 +1229,254 @@ async function deleteStandaloneDirective(directiveId) {
         if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
         showToast(result.message, 'success');
         loadHeroDirectives();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+// ===================== PROPAGANDA PLANS (Kế hoạch tuyên truyền) =====================
+
+let propagandaFilter = 'month'; // 'month' (mặc định), 'week', 'all'
+
+function truncateWords(str, maxWords = 10) {
+    if (!str) return '';
+    const words = str.trim().split(/\s+/);
+    if (words.length <= maxWords) return str;
+    return words.slice(0, maxWords).join(' ') + '...';
+}
+
+function setPropagandaFilter(mode) {
+    propagandaFilter = mode;
+    const btnMonth = document.getElementById('ppFilterMonthBtn');
+    const btnWeek = document.getElementById('ppFilterWeekBtn');
+    const btnAll = document.getElementById('ppFilterAllBtn');
+
+    if (btnMonth) btnMonth.className = mode === 'month' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
+    if (btnWeek) btnWeek.className = mode === 'week' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
+    if (btnAll) btnAll.className = mode === 'all' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
+
+    loadPropagandaPlans();
+}
+
+function getPropagandaDateRange() {
+    const today = new Date();
+    if (propagandaFilter === 'month') {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return { start: toDbDate(start), end: toDbDate(end) };
+    } else if (propagandaFilter === 'week') {
+        const mon = new Date(today);
+        mon.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+        const sun = new Date(mon);
+        sun.setDate(mon.getDate() + 6);
+        return { start: toDbDate(mon), end: toDbDate(sun) };
+    }
+    return { start: null, end: null };
+}
+
+async function loadPropagandaPlans() {
+    const grid = document.getElementById('propagandaGrid');
+    grid.innerHTML = '<div class="empty-state"><div class="loading-spinner">Đang tải kế hoạch...</div></div>';
+    try {
+        const { start, end } = getPropagandaDateRange();
+        let url = '/api/propaganda-plans';
+        if (start && end) {
+            url += `?start_date=${start}&end_date=${end}`;
+        }
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Network error');
+        const plans = await resp.json();
+        renderPropagandaGrid(plans);
+    } catch (e) {
+        grid.innerHTML = '<div class="empty-state"><p class="text-muted">Lỗi tải kế hoạch tuyên truyền</p></div>';
+    }
+}
+
+function renderPropagandaGrid(plans) {
+    const grid = document.getElementById('propagandaGrid');
+    if (!plans || plans.length === 0) {
+        const filterText = propagandaFilter === 'month' ? 'tháng này' : (propagandaFilter === 'week' ? 'tuần này' : 'toàn bộ');
+        grid.innerHTML = `<div class="empty-state"><p class="text-muted">Không có kế hoạch tuyên truyền nào trong ${filterText}</p></div>`;
+        return;
+    }
+
+    const canEdit = isVpdUser();
+    let html = '';
+    plans.forEach(p => {
+        const dateStr = formatDbDateVi(p.PlanDate);
+        const endStr = p.PlanEndDate ? formatDbDateVi(p.PlanEndDate) : '';
+        const dateRange = endStr && endStr !== dateStr ? `${dateStr} → ${endStr}` : dateStr;
+
+        // Tính ngày còn lại
+        const today = new Date(); today.setHours(0,0,0,0);
+        const planD = parseDbDate(p.PlanDate);
+        const diffDays = planD ? Math.ceil((planD - today) / 86400000) : null;
+        let daysLabel = '';
+        if (diffDays !== null) {
+            if (diffDays === 0) daysLabel = '<span class="days-badge today">Hôm nay</span>';
+            else if (diffDays === 1) daysLabel = '<span class="days-badge soon">Ngày mai</span>';
+            else if (diffDays > 0) daysLabel = `<span class="days-badge upcoming">Còn ${diffDays} ngày</span>`;
+        }
+
+        const shortLocation = truncateWords(p.Location, 10);
+
+        html += `
+        <div class="propaganda-card" onclick="showPropagandaDetail(${p.PlanID})" title="Nhấp để xem chi tiết đầy đủ">
+            <!-- Thanh bar ngang trên cùng: Ngày tháng năm + Badge ngày + Nút thao tác -->
+            <div class="propaganda-card-topbar">
+                <div class="propaganda-date-info">
+                    <span class="propaganda-cal-icon">📅</span>
+                    <span class="propaganda-date-text">${escapeHtml(dateRange)}</span>
+                    ${daysLabel}
+                </div>
+                ${canEdit ? `
+                <div class="propaganda-card-actions" onclick="event.stopPropagation()">
+                    <button class="btn-icon btn-xs" onclick="editPropagandaPlan(${p.PlanID})" title="Sửa">✎</button>
+                    <button class="btn-icon btn-xs btn-danger" onclick="deletePropagandaPlan(${p.PlanID})" title="Xóa">✕</button>
+                </div>` : ''}
+            </div>
+
+            <!-- Thân Card: Tên hoạt động + Metadata + Địa điểm rút gọn tối đa 10 từ -->
+            <div class="propaganda-card-body">
+                <div class="propaganda-card-title">${escapeHtml(p.ActivityName)}</div>
+                
+                <div class="propaganda-meta-row">
+                    ${p.AssignedUnit ? `<span class="propaganda-tag unit">📺 ${escapeHtml(p.AssignedUnit)}</span>` : ''}
+                    ${p.CooperatingUnit ? `<span class="propaganda-tag coop">🤝 ${escapeHtml(p.CooperatingUnit)}</span>` : ''}
+                </div>
+
+                ${p.EventTime ? `<div class="propaganda-meta-item"><span class="icon">⏰</span><span class="text">${escapeHtml(p.EventTime)}</span></div>` : ''}
+                ${p.Location ? `<div class="propaganda-meta-item"><span class="icon">📍</span><span class="text">${escapeHtml(shortLocation)}</span></div>` : ''}
+            </div>
+        </div>`;
+    });
+    grid.innerHTML = html;
+}
+
+function handleExportPropaganda() {
+    const { start, end } = getPropagandaDateRange();
+    let url = '/api/propaganda-plans/export';
+    if (start && end) {
+        url += `?start_date=${start}&end_date=${end}`;
+    }
+    showToast('Đang tạo file Excel...', 'info');
+    window.location.href = url;
+}
+
+async function showPropagandaDetail(planId) {
+    try {
+        const resp = await fetch(`/api/propaganda-plans/${planId}`);
+        if (!resp.ok) { showToast('Không tìm thấy kế hoạch', 'error'); return; }
+        const p = await resp.json();
+
+        const rows = [
+            ['📅 Ngày', p.PlanEndDate ? `${formatDbDateVi(p.PlanDate)} → ${formatDbDateVi(p.PlanEndDate)}` : formatDbDateVi(p.PlanDate)],
+            ['⏰ Thời gian', p.EventTime],
+            ['🏛️ Danh nghĩa tổ chức', p.Organizer],
+            ['🏢 Đơn vị thực hiện', p.ExecutingUnit],
+            ['📍 Địa điểm', p.Location],
+            ['📺 Phân công đơn vị HTV', p.AssignedUnit],
+            ['🤝 Đơn vị phối hợp', p.CooperatingUnit],
+            ['📝 Ghi chú', p.Notes],
+        ].filter(([, v]) => v);
+
+        document.getElementById('ppDetailTitle').textContent = '📣 ' + (p.ActivityName || 'Kế hoạch tuyên truyền');
+        document.getElementById('ppDetailBody').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;">
+                ${rows.map(([label, val]) => `
+                <tr style="border-bottom:1px solid var(--border-color);">
+                    <td style="padding:10px 12px;color:var(--text-muted);white-space:nowrap;width:35%;font-size:0.85rem;font-weight:600;">${label}</td>
+                    <td style="padding:10px 12px;font-size:0.9rem;line-height:1.5;">${escapeHtml(val)}</td>
+                </tr>`).join('')}
+            </table>`;
+
+        const footer = document.getElementById('ppDetailFooter');
+        const canEdit = isVpdUser();
+        footer.innerHTML = `
+            <button class="btn btn-secondary" onclick="closeModal('propagandaDetailModal')">Đóng</button>
+            ${canEdit ? `
+            <button class="btn btn-primary" onclick="closeModal('propagandaDetailModal'); editPropagandaPlan(${p.PlanID})">✏️ Sửa</button>
+            <button class="btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;" onclick="closeModal('propagandaDetailModal'); deletePropagandaPlan(${p.PlanID})">🗑️ Xóa</button>
+            ` : ''}`;
+
+        openModal('propagandaDetailModal');
+    } catch (e) {
+        showToast('Lỗi tải chi tiết', 'error');
+    }
+}
+
+function openPropagandaModal(plan) {
+    document.getElementById('ppPlanId').value = plan ? plan.PlanID : '';
+    document.getElementById('ppActivityName').value = plan ? plan.ActivityName : '';
+    document.getElementById('ppPlanDate').value = plan ? (plan.PlanDate || '') : '';
+    document.getElementById('ppPlanEndDate').value = plan ? (plan.PlanEndDate || '') : '';
+    document.getElementById('ppEventTime').value = plan ? (plan.EventTime || '') : '';
+    document.getElementById('ppOrganizer').value = plan ? (plan.Organizer || '') : '';
+    document.getElementById('ppExecutingUnit').value = plan ? (plan.ExecutingUnit || '') : '';
+    document.getElementById('ppLocation').value = plan ? (plan.Location || '') : '';
+    document.getElementById('ppAssignedUnit').value = plan ? (plan.AssignedUnit || '') : '';
+    document.getElementById('ppCooperatingUnit').value = plan ? (plan.CooperatingUnit || '') : '';
+    document.getElementById('ppNotes').value = plan ? (plan.Notes || '') : '';
+    document.getElementById('propagandaModalTitle').textContent = plan ? 'Sửa kế hoạch tuyên truyền' : 'Thêm kế hoạch tuyên truyền';
+    openModal('propagandaModal');
+}
+
+async function editPropagandaPlan(planId) {
+    try {
+        const resp = await fetch(`/api/propaganda-plans/${planId}`);
+        if (!resp.ok) { showToast('Không tìm thấy kế hoạch', 'error'); return; }
+        const plan = await resp.json();
+        openPropagandaModal(plan);
+    } catch (e) { showToast('Lỗi tải kế hoạch', 'error'); }
+}
+
+async function handlePropagandaSubmit() {
+    const planId = document.getElementById('ppPlanId').value;
+    const activityName = document.getElementById('ppActivityName').value.trim();
+    const planDate = document.getElementById('ppPlanDate').value;
+
+    if (!activityName) { showToast('Vui lòng nhập tên hoạt động', 'warning'); return; }
+    if (!planDate) { showToast('Vui lòng chọn ngày bắt đầu', 'warning'); return; }
+
+    const data = {
+        activityName,
+        planDate,
+        planEndDate: document.getElementById('ppPlanEndDate').value || null,
+        eventTime: document.getElementById('ppEventTime').value.trim() || null,
+        organizer: document.getElementById('ppOrganizer').value.trim() || null,
+        executingUnit: document.getElementById('ppExecutingUnit').value.trim() || null,
+        location: document.getElementById('ppLocation').value.trim() || null,
+        assignedUnit: document.getElementById('ppAssignedUnit').value.trim() || null,
+        cooperatingUnit: document.getElementById('ppCooperatingUnit').value.trim() || null,
+        notes: document.getElementById('ppNotes').value.trim() || null,
+    };
+
+    try {
+        const url = planId ? `/api/propaganda-plans/${planId}` : '/api/propaganda-plans';
+        const method = planId ? 'PUT' : 'POST';
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        closeModal('propagandaModal');
+        loadPropagandaPlans();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+async function deletePropagandaPlan(planId) {
+    if (!confirm('Bạn có chắc muốn xóa kế hoạch tuyên truyền này?')) return;
+    try {
+        const resp = await fetch(`/api/propaganda-plans/${planId}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        loadPropagandaPlans();
     } catch (e) {
         showToast('Lỗi kết nối', 'error');
     }
