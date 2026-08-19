@@ -94,21 +94,26 @@ async function checkAuth() {
 }
 
 function showLoggedIn(user) {
+    currentUser = user;
     document.getElementById('authUnlogged').style.display = 'none';
     document.getElementById('authLogged').style.display = 'flex';
     document.getElementById('loggedUsername').textContent = user.full_name || user.username;
     
-    const badge = document.getElementById('loggedUserRole');
-    // Hiển thị nhãn thân thiện hơn cho SSO vai_tro
-    const displayLabel = ROLE_LABELS[user.role] || VAI_TRO_LABELS[user.vai_tro] || user.vai_tro || user.role || 'Nhân viên';
-    const badgeKey = (user.vai_tro || user.role || '').toLowerCase().replace(/_/g, '-');
-    badge.textContent = displayLabel;
-    badge.className = 'user-role-badge ' + badgeKey;
-
-    // Phân quyền hiển thị — dùng isAdminUser(), isBanTgdUser() và isVpdUser() sau khi currentUser đã set
+    // Phân quyền hiển thị
     const isAdmin  = isAdminUser();
     const isVPD    = isVpdUser();
     const canStandalone = isAdmin || isBanTgdUser();
+
+    const badge = document.getElementById('loggedUserRole');
+    let displayLabel = 'Nhân viên';
+    if (isAdmin) {
+        displayLabel = 'Quản trị viên';
+    } else {
+        displayLabel = ROLE_LABELS[user.role] || VAI_TRO_LABELS[user.vai_tro] || user.vai_tro || user.role || 'Nhân viên';
+    }
+    const badgeKey = isAdmin ? 'admin' : (user.vai_tro || user.role || '').toLowerCase().replace(/_/g, '-');
+    badge.textContent = displayLabel;
+    badge.className = 'user-role-badge ' + badgeKey;
 
     document.getElementById('adminUserMgmtBtn').style.display = isAdmin ? '' : 'none';
     document.getElementById('addMeetingBtn').style.display = isVPD ? '' : 'none';
@@ -121,6 +126,7 @@ function showLoggedIn(user) {
 }
 
 function showLoggedOut() {
+    currentUser = null;
     document.getElementById('authUnlogged').style.display = 'flex';
     document.getElementById('authLogged').style.display = 'none';
     document.getElementById('adminUserMgmtBtn').style.display = 'none';
@@ -132,10 +138,11 @@ function showLoggedOut() {
 
 function isAdminUser() {
     if (!currentUser) return false;
-    // SSO: sso_role = 'admin' (chữ thường)
+    const un = (currentUser.username || '').toLowerCase();
+    if (un === 'admin') return true;
     if ((currentUser.sso_role || '').toLowerCase() === 'admin') return true;
-    // Local login: role DB = 'Admin'
-    if (currentUser.role === 'Admin') return true;
+    if ((currentUser.role || '').toLowerCase() === 'admin') return true;
+    if ((currentUser.vai_tro || '').toLowerCase() === 'admin') return true;
     return false;
 }
 

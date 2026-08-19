@@ -77,12 +77,14 @@ from htv_sso_fastapi import _login_url
 
 
 def is_admin_user(user: dict) -> bool:
-    """Admin = SSO role='admin' HOẶC local DB role='Admin'."""
-    # SSO: cột role = 'admin'
+    """Admin = SSO role='admin' HOẶC local DB role='Admin' HOẶC username='admin'."""
+    username = (user.get("username") or "").strip().lower()
+    if username == "admin":
+        return True
     sso_role_col = (user.get("sso_role") or "").strip().lower()
-    # Local login: role DB = 'Admin'
     local_role = (user.get("role") or "").strip()
-    return sso_role_col == "admin" or local_role == "Admin"
+    vai_tro = (user.get("vai_tro") or "").strip()
+    return sso_role_col == "admin" or local_role == "Admin" or vai_tro == "Admin"
 
 
 def is_bantgd_user(user: dict) -> bool:
@@ -151,26 +153,51 @@ def get_current_user(request: Request) -> dict:
     if not sso_user:
         return {"logged_in": False}
 
-    username = sso_user.get("username")
+    username = sso_user.get("username", "").strip()
+    is_local = sso_user.get("is_local", False)
     raw_payload = sso_user.get("raw_payload") or {}
     full_name = sso_user.get("full_name") or username
 
-    # --- vai_tro: lấy trực tiếp từ SSO, KHÔNG ánh xạ ---
+    # Nếu là tài khoản Admin local
+    if username.lower() == "admin":
+        return {
+            "logged_in": True,
+            "username": "admin",
+            "full_name": "Quản trị viên",
+            "vai_tro": "Admin",
+            "sso_role": "admin",
+            "role": "Admin",
+            "department": "Văn phòng Đài",
+            "is_local": True,
+        }
+
+    if is_local:
+        db_user = db_service.get_user(username)
+        role = (db_user.get("Role") if db_user else None) or sso_user.get("role") or "nhan_vien"
+        dept = (db_user.get("Department") if db_user else None) or sso_user.get("department") or ""
+        return {
+            "logged_in": True,
+            "username": username,
+            "full_name": full_name,
+            "vai_tro": role,
+            "sso_role": "admin" if role.lower() == "admin" else "user",
+            "role": role,
+            "department": dept,
+            "is_local": True,
+        }
+
+    # --- Xử lý SSO ---
     vai_tro = (sso_user.get("vai_tro") or "").strip()
     if vai_tro.lower() in ["user", "guest", ""]:
         vai_tro = "nhan_vien"
 
-    # --- sso_role: cột 'role' trong SSO DB (admin / editor / user) ---
-    # Với local login, đây là role DB cũ (Admin / BPT / BanTGD / nhan_vien)
     sso_role_col = (sso_user.get("role") or "user").strip()
-
-    # --- department: lấy từ trường 'ban' của SSO ---
     ban = (sso_user.get("ban") or sso_user.get("department") or "").strip()
     if not ban and raw_payload:
         ban = _extract_sso_department(raw_payload)
 
-    # --- Lưu vào DB (lưu vai_tro nguyên gốc thay vì role đã map) ---
-    if username:
+    # Chỉ đồng bộ user SSO vào DB, không ghi đè user local
+    if username and username.lower() != "admin":
         db_service.save_or_update_sso_user(username, vai_tro, ban, force_update=True)
 
     return {
@@ -178,8 +205,8 @@ def get_current_user(request: Request) -> dict:
         "username": username,
         "full_name": full_name,
         "vai_tro": vai_tro,       # vai_tro SSO nguyên gốc
-        "sso_role": sso_role_col, # role SSO ('admin'/'editor'/'user') hoặc role DB cũ
-        "role": sso_role_col,     # backward compat với local login
+        "sso_role": sso_role_col, # role SSO ('admin'/'editor'/'user')
+        "role": sso_role_col,
         "department": ban,
     }
 
@@ -349,19 +376,23 @@ def login(request: Request, req: LoginRequest):
     if not user or user["Password"] != req.password:
         raise HTTPException(status_code=400, detail="Tài khoản hoặc mật khẩu không chính xác.")
 
+    user_role = user["Role"] or "Admin"
     request.session["sso_user"] = {
         "username": user["Username"],
         "full_name": user["Username"],
-        "role": user["Role"],
-        "department": user.get("Department") or "",
+        "role": user_role,
+        "vai_tro": user_role,
+        "department": user.get("Department") or "Văn phòng Đài",
+        "is_local": True,
         "sver": 1,
     }
     request.session["_sso_last_check"] = time.time()
 
     return {
         "username": user["Username"],
-        "role": user["Role"],
-        "department": user.get("Department") or "",
+        "role": user_role,
+        "vai_tro": user_role,
+        "department": user.get("Department") or "Văn phòng Đài",
     }
 
 
