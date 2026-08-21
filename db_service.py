@@ -1059,10 +1059,13 @@ def get_propaganda_plans(
         cursor = conn.cursor()
         query = f"SELECT TOP ({int(limit)}) * FROM PropagandaPlans WHERE 1=1"
         params = []
-        if start_date:
-            query += " AND PlanDate >= ?"
-            params.append(start_date)
-        if end_date:
+        if start_date and end_date:
+            query += " AND (PlanDate <= ? AND (PlanEndDate >= ? OR (PlanEndDate IS NULL AND PlanDate >= ?)))"
+            params.extend([end_date, start_date, start_date])
+        elif start_date:
+            query += " AND (PlanEndDate >= ? OR (PlanEndDate IS NULL AND PlanDate >= ?))"
+            params.extend([start_date, start_date])
+        elif end_date:
             query += " AND PlanDate <= ?"
             params.append(end_date)
         query += " ORDER BY PlanDate ASC"

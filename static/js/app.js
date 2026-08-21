@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     checkAuth();
     loadHeroDirectives();
-    loadPropagandaPlans();
+    loadPropagandaPlans(true);
     loadEvents();
     loadMeetings();
     bindEvents();
@@ -214,12 +214,29 @@ function bindEvents() {
     document.getElementById('eventFormSubmit').addEventListener('click', handleEventSubmit);
 
     // Propaganda Plans (Kế hoạch tuyên truyền)
-    document.getElementById('addPropagandaBtn').addEventListener('click', () => openPropagandaModal());
-    document.getElementById('propagandaFormSubmit').addEventListener('click', handlePropagandaSubmit);
-    document.getElementById('ppFilterMonthBtn').addEventListener('click', () => setPropagandaFilter('month'));
-    document.getElementById('ppFilterWeekBtn').addEventListener('click', () => setPropagandaFilter('week'));
-    document.getElementById('ppFilterAllBtn').addEventListener('click', () => setPropagandaFilter('all'));
-    document.getElementById('exportPropagandaBtn').addEventListener('click', handleExportPropaganda);
+    const addPpBtn = document.getElementById('addPropagandaBtn');
+    if (addPpBtn) addPpBtn.addEventListener('click', () => openPropagandaModal());
+    
+    const ppSubmit = document.getElementById('propagandaFormSubmit');
+    if (ppSubmit) ppSubmit.addEventListener('click', handlePropagandaSubmit);
+
+    const prevMonthBtn = document.getElementById('ppPrevMonthBtn');
+    if (prevMonthBtn) prevMonthBtn.addEventListener('click', prevPropagandaMonth);
+
+    const nextMonthBtn = document.getElementById('ppNextMonthBtn');
+    if (nextMonthBtn) nextMonthBtn.addEventListener('click', nextPropagandaMonth);
+
+    const ppTodayBtn = document.getElementById('ppTodayBtn');
+    if (ppTodayBtn) ppTodayBtn.addEventListener('click', goToPropagandaToday);
+
+    const ppTimelineBtn = document.getElementById('ppViewTimelineBtn');
+    if (ppTimelineBtn) ppTimelineBtn.addEventListener('click', () => setPropagandaViewMode('timeline'));
+
+    const ppGridBtn = document.getElementById('ppViewGridBtn');
+    if (ppGridBtn) ppGridBtn.addEventListener('click', () => setPropagandaViewMode('grid'));
+
+    const expPpBtn = document.getElementById('exportPropagandaBtn');
+    if (expPpBtn) expPpBtn.addEventListener('click', handleExportPropaganda);
 
     // Standalone Directive (Chỉ đạo ngoài họp)
     document.getElementById('addStandaloneDirectiveBtn').addEventListener('click', () => openStandaloneDirectiveModal());
@@ -1243,7 +1260,211 @@ async function deleteStandaloneDirective(directiveId) {
 
 // ===================== PROPAGANDA PLANS (Kế hoạch tuyên truyền) =====================
 
-let propagandaFilter = 'month'; // 'month' (mặc định), 'week', 'all'
+let propagandaYear = new Date().getFullYear();
+let propagandaMonth = new Date().getMonth(); // 0-indexed (0: Tháng 1, ..., 7: Tháng 8)
+let propagandaViewMode = 'timeline'; // 'timeline' (mặc định) | 'grid'
+let cachedPropagandaPlans = [];
+
+function updatePropagandaMonthDisplay() {
+    const label = document.getElementById('ppMonthLabel');
+    if (label) {
+        label.textContent = `Tháng ${propagandaMonth + 1}/${propagandaYear}`;
+    }
+}
+
+function prevPropagandaMonth() {
+    propagandaMonth--;
+    if (propagandaMonth < 0) {
+        propagandaMonth = 11;
+        propagandaYear--;
+    }
+    updatePropagandaMonthDisplay();
+    loadPropagandaPlans(false);
+}
+
+function nextPropagandaMonth() {
+    propagandaMonth++;
+    if (propagandaMonth > 11) {
+        propagandaMonth = 0;
+        propagandaYear++;
+    }
+    updatePropagandaMonthDisplay();
+    loadPropagandaPlans(false);
+}
+
+function goToPropagandaToday() {
+    const now = new Date();
+    propagandaYear = now.getFullYear();
+    propagandaMonth = now.getMonth();
+    updatePropagandaMonthDisplay();
+    loadPropagandaPlans(true);
+}
+
+function setPropagandaViewMode(mode) {
+    propagandaViewMode = mode;
+    const btnTimeline = document.getElementById('ppViewTimelineBtn');
+    const btnGrid = document.getElementById('ppViewGridBtn');
+    const timelineWrap = document.getElementById('propagandaTimelineWrapper');
+    const gridWrap = document.getElementById('propagandaGridWrapper');
+
+    if (btnTimeline) btnTimeline.className = mode === 'timeline' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
+    if (btnGrid) btnGrid.className = mode === 'grid' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
+
+    if (timelineWrap) timelineWrap.style.display = mode === 'timeline' ? 'block' : 'none';
+    if (gridWrap) gridWrap.style.display = mode === 'grid' ? 'block' : 'none';
+
+    renderPropagandaView(mode === 'timeline');
+}
+
+function getPropagandaDateRange() {
+    const start = new Date(propagandaYear, propagandaMonth, 1);
+    const end = new Date(propagandaYear, propagandaMonth + 1, 0);
+    return { start: toDbDate(start), end: toDbDate(end) };
+}
+
+async function loadPropagandaPlans(scrollToToday = false) {
+    updatePropagandaMonthDisplay();
+    const container = document.getElementById('propagandaTimelineContainer');
+    const grid = document.getElementById('propagandaGrid');
+    
+    if (container) container.innerHTML = '<div class="empty-state"><div class="loading-spinner">Đang tải timeline kế hoạch...</div></div>';
+    if (grid) grid.innerHTML = '<div class="empty-state"><div class="loading-spinner">Đang tải kế hoạch...</div></div>';
+
+    try {
+        const { start, end } = getPropagandaDateRange();
+        const url = `/api/propaganda-plans?start_date=${start}&end_date=${end}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Network error');
+        cachedPropagandaPlans = await resp.json();
+        renderPropagandaView(scrollToToday);
+    } catch (e) {
+        console.error('Error loading propaganda plans:', e);
+        if (container) container.innerHTML = '<div class="empty-state"><p class="text-muted">Lỗi tải kế hoạch tuyên truyền</p></div>';
+        if (grid) grid.innerHTML = '<div class="empty-state"><p class="text-muted">Lỗi tải kế hoạch tuyên truyền</p></div>';
+    }
+}
+
+function renderPropagandaView(scrollToToday = false) {
+    if (propagandaViewMode === 'timeline') {
+        renderPropagandaTimeline(cachedPropagandaPlans, scrollToToday);
+    } else {
+        renderPropagandaGrid(cachedPropagandaPlans);
+    }
+}
+
+function renderPropagandaTimeline(plans, scrollToToday = false) {
+    const container = document.getElementById('propagandaTimelineContainer');
+    if (!container) return;
+
+    const daysInMonth = new Date(propagandaYear, propagandaMonth + 1, 0).getDate();
+    const now = new Date();
+    const todayStr = toDbDate(now);
+    const dayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const canEdit = isVpdUser();
+
+    let html = `
+    <table class="pp-timeline-table">
+        <thead>
+            <tr>
+                <th class="pp-th-date">Ngày</th>
+                <th class="pp-th-content">Kế hoạch tuyên truyền</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    let hasTodayRow = false;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(propagandaYear, propagandaMonth, d);
+        const dayOfWeek = dateObj.getDay();
+        const mmStr = String(propagandaMonth + 1).padStart(2, '0');
+        const ddStr = String(d).padStart(2, '0');
+        const dateStr = `${propagandaYear}-${mmStr}-${ddStr}`;
+        const isToday = (todayStr === dateStr);
+        const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+        const dayLabel = `${dayNames[dayOfWeek]}, ${ddStr}/${mmStr}`;
+
+        if (isToday) hasTodayRow = true;
+
+        // Lọc các kế hoạch diễn ra trong ngày này
+        const dayPlans = (plans || []).filter(p => {
+            const start = p.PlanDate;
+            const end = p.PlanEndDate || p.PlanDate;
+            return dateStr >= start && dateStr <= end;
+        });
+
+        const rowClass = isToday ? 'pp-timeline-row pp-row-today' : 'pp-timeline-row';
+        const rowId = isToday ? 'id="pp-timeline-today"' : '';
+
+        html += `<tr class="${rowClass}" ${rowId}>`;
+        
+        // Cột Ngày
+        html += `<td class="pp-day-cell">`;
+        if (isToday) {
+            html += `<div class="pp-day-text pp-day-today">
+                <span>${escapeHtml(dayLabel)}</span>
+                <span class="days-badge today" style="font-size:0.65rem;padding:0 5px;">Hôm nay</span>
+            </div>`;
+        } else {
+            html += `<div class="pp-day-text ${isWeekend ? 'pp-day-weekend' : ''}">${escapeHtml(dayLabel)}</div>`;
+        }
+        html += `</td>`;
+
+        // Cột Nội dung / Kế hoạch
+        html += `<td class="pp-content-cell">`;
+        if (dayPlans.length === 0) {
+            html += `<div class="pp-empty-cell"></div>`;
+        } else {
+            dayPlans.forEach(p => {
+                const subParts = [];
+                if (p.AssignedUnit) subParts.push(`📺 ${escapeHtml(p.AssignedUnit)}`);
+                if (p.ExecutingUnit) subParts.push(`🏢 ${escapeHtml(p.ExecutingUnit)}`);
+                if (p.CooperatingUnit) subParts.push(`🤝 ${escapeHtml(p.CooperatingUnit)}`);
+                if (p.Location) subParts.push(`📍 ${escapeHtml(p.Location)}`);
+
+                // Kiểm tra sự kiện nhiều ngày
+                let multiDayTag = '';
+                if (p.PlanEndDate && p.PlanEndDate !== p.PlanDate) {
+                    multiDayTag = `<span class="pp-card-tag">📅 ${formatDbDateVi(p.PlanDate)} → ${formatDbDateVi(p.PlanEndDate)}</span>`;
+                }
+
+                html += `
+                <div class="pp-timeline-card" onclick="showPropagandaDetail(${p.PlanID})" title="Nhấp để xem chi tiết đầy đủ">
+                    <div class="pp-card-main">
+                        <div class="pp-card-title">
+                            ${escapeHtml(p.ActivityName)}
+                            ${p.EventTime ? `<span class="pp-card-time">(${escapeHtml(p.EventTime)})</span>` : ''}
+                        </div>
+                        <div class="pp-card-sub">
+                            ${subParts.map(s => `<span>${s}</span>`).join('')}
+                            ${multiDayTag}
+                        </div>
+                    </div>
+                    ${canEdit ? `
+                    <div class="pp-card-actions" onclick="event.stopPropagation()">
+                        <button class="btn-icon" onclick="editPropagandaPlan(${p.PlanID})" title="Sửa">✎</button>
+                        <button class="btn-icon btn-danger" onclick="deletePropagandaPlan(${p.PlanID})" title="Xóa">✕</button>
+                    </div>` : ''}
+                </div>`;
+            });
+        }
+        html += `</td>`;
+        html += `</tr>`;
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+
+    // Cuộn tới ngày hôm nay nếu người dùng yêu cầu hoặc ở tháng hiện tại
+    if (scrollToToday && hasTodayRow) {
+        setTimeout(() => {
+            const todayEl = document.getElementById('pp-timeline-today');
+            if (todayEl) {
+                todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 120);
+    }
+}
 
 function truncateWords(str, maxWords = 10) {
     if (!str) return '';
@@ -1252,58 +1473,11 @@ function truncateWords(str, maxWords = 10) {
     return words.slice(0, maxWords).join(' ') + '...';
 }
 
-function setPropagandaFilter(mode) {
-    propagandaFilter = mode;
-    const btnMonth = document.getElementById('ppFilterMonthBtn');
-    const btnWeek = document.getElementById('ppFilterWeekBtn');
-    const btnAll = document.getElementById('ppFilterAllBtn');
-
-    if (btnMonth) btnMonth.className = mode === 'month' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
-    if (btnWeek) btnWeek.className = mode === 'week' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
-    if (btnAll) btnAll.className = mode === 'all' ? 'btn btn-sm btn-secondary active' : 'btn btn-sm btn-ghost';
-
-    loadPropagandaPlans();
-}
-
-function getPropagandaDateRange() {
-    const today = new Date();
-    if (propagandaFilter === 'month') {
-        const start = new Date(today.getFullYear(), today.getMonth(), 1);
-        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        return { start: toDbDate(start), end: toDbDate(end) };
-    } else if (propagandaFilter === 'week') {
-        const mon = new Date(today);
-        mon.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
-        const sun = new Date(mon);
-        sun.setDate(mon.getDate() + 6);
-        return { start: toDbDate(mon), end: toDbDate(sun) };
-    }
-    return { start: null, end: null };
-}
-
-async function loadPropagandaPlans() {
-    const grid = document.getElementById('propagandaGrid');
-    grid.innerHTML = '<div class="empty-state"><div class="loading-spinner">Đang tải kế hoạch...</div></div>';
-    try {
-        const { start, end } = getPropagandaDateRange();
-        let url = '/api/propaganda-plans';
-        if (start && end) {
-            url += `?start_date=${start}&end_date=${end}`;
-        }
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error('Network error');
-        const plans = await resp.json();
-        renderPropagandaGrid(plans);
-    } catch (e) {
-        grid.innerHTML = '<div class="empty-state"><p class="text-muted">Lỗi tải kế hoạch tuyên truyền</p></div>';
-    }
-}
-
 function renderPropagandaGrid(plans) {
     const grid = document.getElementById('propagandaGrid');
+    if (!grid) return;
     if (!plans || plans.length === 0) {
-        const filterText = propagandaFilter === 'month' ? 'tháng này' : (propagandaFilter === 'week' ? 'tuần này' : 'toàn bộ');
-        grid.innerHTML = `<div class="empty-state"><p class="text-muted">Không có kế hoạch tuyên truyền nào trong ${filterText}</p></div>`;
+        grid.innerHTML = `<div class="empty-state"><p class="text-muted">Không có kế hoạch tuyên truyền nào trong Tháng ${propagandaMonth + 1}/${propagandaYear}</p></div>`;
         return;
     }
 

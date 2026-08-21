@@ -1457,3 +1457,286 @@ header {
 [data-theme="dark"] .days-badge.soon { background: rgba(217,119,6,.25); color: #fcd34d; }
 [data-theme="dark"] .days-badge.upcoming { background: rgba(22,163,74,.25); color: #86efac; }
 
+/* ============================================================
+   KẾ HOẠCH TUYÊN TRUYỀN - MONTH TIMELINE VIEW
+   ============================================================ */
+
+/* Nút Xuất Excel */
+.btn-excel {
+    background: #059669;
+    color: #ffffff !important;
+    border: 1px solid #047857;
+    font-weight: 600;
+    transition: var(--transition);
+}
+.btn-excel:hover {
+    background: #047857;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
+}
+
+/* Thanh điều hướng tháng */
+.pp-month-navigator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    padding: 3px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 9999px;
+    box-shadow: var(--shadow-sm);
+}
+.pp-nav-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.pp-nav-btn:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+.pp-month-display {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 105px;
+    text-align: center;
+    user-select: none;
+}
+.pp-today-btn {
+    border-radius: 9999px;
+    padding: 3px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.pp-today-btn:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Timeline Wrapper & Table */
+.pp-timeline-wrapper {
+    margin-top: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+.pp-timeline-container {
+    max-height: 600px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+.pp-timeline-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+}
+.pp-timeline-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.pp-th-date {
+    width: 135px;
+    min-width: 125px;
+    text-align: left;
+    border-right: 1px solid var(--border-color);
+}
+.pp-th-content {
+    text-align: left;
+    padding-left: 16px;
+}
+
+/* Rows & Cells */
+.pp-timeline-row {
+    transition: background 0.15s ease;
+}
+.pp-timeline-row:hover {
+    background: var(--bg-card-hover);
+}
+.pp-row-today {
+    background: rgba(37, 99, 235, 0.045) !important;
+}
+[data-theme="dark"] .pp-row-today {
+    background: rgba(59, 130, 246, 0.09) !important;
+}
+
+.pp-day-cell {
+    width: 135px;
+    min-width: 125px;
+    padding: 10px 14px;
+    vertical-align: top;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background: inherit;
+}
+.pp-day-text {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.pp-day-weekend {
+    color: var(--text-muted);
+}
+.pp-day-today {
+    color: var(--primary);
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pp-content-cell {
+    padding: 6px 14px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-color);
+    background: inherit;
+    min-height: 44px;
+}
+.pp-empty-cell {
+    min-height: 28px;
+}
+
+/* Timeline Cards */
+.pp-timeline-card {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 4px solid #2563eb;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pp-timeline-card:last-child {
+    margin-bottom: 0;
+}
+.pp-timeline-card:hover {
+    background: #e0f2fe;
+    border-color: #60a5fa;
+    border-left-color: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    transform: translateY(-1px);
+}
+[data-theme="dark"] .pp-timeline-card {
+    background: rgba(30, 58, 138, 0.25);
+    border-color: rgba(59, 130, 246, 0.35);
+    border-left-color: #3b82f6;
+}
+[data-theme="dark"] .pp-timeline-card:hover {
+    background: rgba(30, 58, 138, 0.45);
+    border-color: #60a5fa;
+    border-left-color: #60a5fa;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.pp-card-main {
+    flex: 1;
+    min-width: 0;
+}
+.pp-card-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    line-height: 1.4;
+}
+[data-theme="dark"] .pp-card-title {
+    color: #93c5fd;
+}
+.pp-card-time {
+    font-weight: 500;
+    font-size: 0.78rem;
+    color: #2563eb;
+    margin-left: 6px;
+}
+[data-theme="dark"] .pp-card-time {
+    color: #60a5fa;
+}
+.pp-card-sub {
+    font-size: 0.78rem;
+    color: #3b82f6;
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+[data-theme="dark"] .pp-card-sub {
+    color: #94a3b8;
+}
+
+.pp-card-actions {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.pp-timeline-card:hover .pp-card-actions {
+    display: flex;
+}
+.pp-card-actions .btn-icon {
+    width: 22px;
+    height: 22px;
+    font-size: 0.7rem;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #1e293b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.pp-card-actions .btn-icon:hover {
+    background: #ffffff;
+    color: #2563eb;
+}
+.pp-card-actions .btn-danger:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+[data-theme="dark"] .pp-card-actions .btn-icon {
+    background: rgba(30, 41, 59, 0.85);
+    color: #f8fafc;
+}
+[data-theme="dark"] .pp-card-actions .btn-icon:hover {
+    background: #334155;
+    color: #60a5fa;
+}
+[data-theme="dark"] .pp-card-actions .btn-danger:hover {
+    background: #dc2626;
+    color: #ffffff;
+}
+

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Ban HTV</title>
     <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
-    <link rel="stylesheet" href="/static/css/style.css?v=3">
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
     <!-- Script chống flash trắng/đen khi load -->
     <script>
         (function() {
@@ -141,17 +141,50 @@
 
             <!-- Propaganda Plans Section -->
             <section class="events-section propaganda-section" id="propagandaSection">
-                <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
+                <div class="section-header propaganda-header" style="flex-wrap: wrap; gap: 12px;">
                     <div class="section-title">
-                        <div class="icon" style="background: #fff3e0; color: #e65100;">📣</div>
+                        <div class="icon" style="background: #eff6ff; color: #2563eb;">📣</div>
                         <h2>Kế hoạch tuyên truyền</h2>
                     </div>
 
-                    <!-- Bộ lọc theo thời gian: Tháng này (mặc định), Tuần này, Tất cả -->
-                    <div class="filter-group propaganda-filters">
-                        <button class="btn btn-sm btn-secondary active" id="ppFilterMonthBtn">Tháng này</button>
-                        <button class="btn btn-sm btn-ghost" id="ppFilterWeekBtn">Tuần này</button>
-                        <button class="btn btn-sm btn-ghost" id="ppFilterAllBtn">Tất cả</button>
+                    <!-- Thanh điều hướng tháng (Tháng trước, Tháng hiển thị, Tháng sau, Hôm nay) -->
+                    <div class="pp-month-navigator">
+                        <button class="btn-icon pp-nav-btn" id="ppPrevMonthBtn" title="Tháng trước">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <span class="pp-month-display" id="ppMonthLabel">Tháng 8/2026</span>
+                        <button class="btn-icon pp-nav-btn" id="ppNextMonthBtn" title="Tháng sau">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                        <button class="btn btn-sm btn-ghost pp-today-btn" id="ppTodayBtn">Hôm nay</button>
+                    </div>
+
+                    <!-- Chuyển đổi chế độ xem: Timeline tháng (Mặc định) / Dạng thẻ -->
+                    <div class="filter-group propaganda-view-toggle">
+                        <button class="btn btn-sm btn-secondary active" id="ppViewTimelineBtn" title="Xem dạng timeline các ngày trong tháng">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <line x1="8" y1="6" x2="21" y2="6"></line>
+                                <line x1="8" y1="12" x2="21" y2="12"></line>
+                                <line x1="8" y1="18" x2="21" y2="18"></line>
+                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                            </svg>
+                            Timeline tháng
+                        </button>
+                        <button class="btn btn-sm btn-ghost" id="ppViewGridBtn" title="Xem dạng thẻ">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                            Dạng thẻ
+                        </button>
                     </div>
 
                     <!-- Thao tác: Xuất Excel + Thêm kế hoạch -->
@@ -170,7 +203,17 @@
                     </div>
                 </div>
 
-                <div class="propaganda-scroll-container">
+                <!-- 1. View Mặc định: Timeline tháng với các ngày trong tháng (không có cột giờ) -->
+                <div class="pp-timeline-wrapper" id="propagandaTimelineWrapper">
+                    <div class="pp-timeline-container" id="propagandaTimelineContainer">
+                        <div class="empty-state">
+                            <div class="loading-spinner">Đang tải timeline kế hoạch...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. View phụ: Grid dạng thẻ -->
+                <div class="propaganda-scroll-container" id="propagandaGridWrapper" style="display: none;">
                     <div class="propaganda-grid" id="propagandaGrid">
                         <div class="empty-state">
                             <p class="text-muted">Không có kế hoạch tuyên truyền nào</p>
@@ -725,6 +768,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>
