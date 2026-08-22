@@ -137,6 +137,8 @@
                         </li>
                     </ul>
                 </div>
+                <!-- Phân trang Chỉ đạo Ban TGĐ -->
+                <div class="directive-pagination" id="heroDirectivePagination" style="display: none;"></div>
             </section>
 
             <!-- Propaganda Plans Section -->
@@ -246,6 +248,7 @@
                         <h2>Biên bản họp giao ban</h2>
                     </div>
                     <div class="flex gap-2 items-center">
+                        <button class="btn btn-sm btn-secondary" id="addMeetingDirectiveBtn" style="display: none;">+ Thêm chỉ đạo / kết luận</button>
                         <button class="btn btn-sm btn-secondary" id="addMeetingBtn" style="display: none;">+ Tạo cuộc họp mới</button>
                     </div>
                 </div>
@@ -442,33 +445,40 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Giao cho (đơn vị)</label>
-                            <select class="form-select" id="dfAssignedTo">
-                                <option value="">-- Toàn Đài / Chung cho các Ban --</option>
-                                <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                <option value="Ban Chương trình">Ban Chương trình</option>
-                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                            </select>
+                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                                <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
+                                <button type="button" class="btn-text-action" id="dfAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
+                            </div>
+                            <div id="dfAssignedList" class="assigned-units-container">
+                                <div class="assigned-unit-row">
+                                    <select class="form-select df-assigned-select">
+                                        <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                        <option value="Ban Chương trình">Ban Chương trình</option>
+                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -513,20 +523,55 @@
                         <input type="text" class="form-input" id="ppActivityName"
                             placeholder="VD: Lễ kỷ niệm 80 năm ngày thành lập Đài" required>
                     </div>
-                    <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" style="font-weight: 600;">Hình thức thời gian thực hiện *</label>
+                        <div class="time-type-tabs" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <button type="button" class="btn btn-sm btn-secondary active" id="ppTabExact" onclick="setPropagandaDateModeUI('exact')" style="flex: 1; justify-content: center;">
+                                📅 Theo ngày cụ thể (Bắt đầu - Kết thúc)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-ghost" id="ppTabMonth" onclick="setPropagandaDateModeUI('month')" style="flex: 1; justify-content: center;">
+                                🗓️ Dự kiến theo tháng (Chỉ chọn Tháng & Năm)
+                            </button>
+                        </div>
+                        <input type="hidden" id="ppDateModeHidden" value="exact">
+                    </div>
+                    <div class="form-row" id="ppExactDateGroup">
                         <div class="form-group">
                             <label class="form-label">Ngày bắt đầu *</label>
-                            <input type="date" class="form-input" id="ppPlanDate" required>
+                            <input type="date" class="form-input" id="ppPlanDate">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Ngày kết thúc</label>
+                            <label class="form-label">Ngày kết thúc (nếu có)</label>
                             <input type="date" class="form-input" id="ppPlanEndDate">
                         </div>
                     </div>
+                    <div class="form-row" id="ppMonthDateGroup" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">Tháng dự kiến *</label>
+                            <select class="form-select" id="ppMonthSelect">
+                                <option value="1">Tháng 1</option>
+                                <option value="2">Tháng 2</option>
+                                <option value="3">Tháng 3</option>
+                                <option value="4">Tháng 4</option>
+                                <option value="5">Tháng 5</option>
+                                <option value="6">Tháng 6</option>
+                                <option value="7">Tháng 7</option>
+                                <option value="8">Tháng 8</option>
+                                <option value="9">Tháng 9</option>
+                                <option value="10">Tháng 10</option>
+                                <option value="11" selected>Tháng 11</option>
+                                <option value="12">Tháng 12</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Năm *</label>
+                            <input type="number" class="form-input" id="ppYearInput" value="2026" min="2020" max="2035">
+                        </div>
+                    </div>
                     <div class="form-group">
-                        <label class="form-label">Thời gian</label>
+                        <label class="form-label">Ghi chú thời gian (hiển thị)</label>
                         <input type="text" class="form-input" id="ppEventTime"
-                            placeholder="VD: Dự kiến 08 giờ ngày 17/7/2026">
+                            placeholder="VD: Dự kiến tháng 11 năm 2026 hoặc 08 giờ ngày 17/7/2026">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -650,33 +695,40 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Giao cho (đơn vị)</label>
-                            <select class="form-select" id="sdAssignedTo">
-                                <option value="">-- Toàn Đài / Chung cho các Ban --</option>
-                                <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                <option value="Ban Chương trình">Ban Chương trình</option>
-                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                            </select>
+                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                                <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
+                                <button type="button" class="btn-text-action" id="sdAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
+                            </div>
+                            <div id="sdAssignedList" class="assigned-units-container">
+                                <div class="assigned-unit-row">
+                                    <select class="form-select sd-assigned-select">
+                                        <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                        <option value="Ban Chương trình">Ban Chương trình</option>
+                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">

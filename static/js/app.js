@@ -23,12 +23,63 @@ const VAI_TRO_LABELS = {
     'Admin':      'Quản trị viên',
 };
 
-// Filter state cho Chỉ đạo TGĐ
+// Filter state cho Chỉ đạo TGĐ & Pagination
 let heroDirectiveFilter = {
     mode: '2days', // '2days' (hôm nay + hôm qua), '7days', 'all', 'custom_date'
     date: '',
     department: ''
 };
+let heroDirectivePage = 1;
+const HERO_DIRECTIVES_PER_PAGE = 5; // Số nhóm ngày hiển thị trên mỗi trang khi danh sách dài
+let cachedHeroDirectives = [];
+
+const DEPARTMENT_OPTIONS = [
+    { value: '', label: '-- Toàn Đài / Chung cho các Ban --' },
+    { value: 'Các Trưởng Ban', label: 'Các Trưởng Ban / Đơn vị' },
+    { value: 'Ban Chương trình', label: 'Ban Chương trình' },
+    { value: 'Trung tâm Tin tức', label: 'Trung tâm Tin tức' },
+    { value: 'Trung tâm Phát thanh', label: 'Trung tâm Phát thanh' },
+    { value: 'Trung tâm Phát triển nội dung số', label: 'TT Phát triển nội dung số' },
+    { value: 'Ban Chuyên đề', label: 'Ban Chuyên đề' },
+    { value: 'Ban Văn nghệ', label: 'Ban Văn nghệ' },
+    { value: 'Ban Khoa giáo', label: 'Ban Khoa giáo' },
+    { value: 'Ban Thể dục Thể thao', label: 'Ban Thể dục Thể thao' },
+    { value: 'Hãng phim Truyền hình (TFS)', label: 'Hãng phim Truyền hình (TFS)' },
+    { value: 'Trung tâm HTV Bình Dương', label: 'TT HTV Bình Dương' },
+    { value: 'Trung tâm HTV Bà Rịa', label: 'TT HTV Bà Rịa' },
+    { value: 'Văn phòng Hà Nội', label: 'Văn phòng Hà Nội' },
+    { value: 'Văn phòng Đài', label: 'Văn phòng Đài' },
+    { value: 'Ban Tổ chức - Đào tạo', label: 'Ban Tổ chức - Đào tạo' },
+    { value: 'Ban Chiến lược', label: 'Ban Chiến lược' },
+    { value: 'Ban Kế hoạch - Tài chính', label: 'Ban Kế hoạch - Tài chính' },
+    { value: 'Ban Kỹ thuật công nghệ', label: 'Ban Kỹ thuật công nghệ' },
+    { value: 'Ban Kỹ thuật cơ điện lạnh', label: 'Ban Kỹ thuật cơ điện lạnh' },
+    { value: 'Trung tâm Sản xuất chương trình', label: 'TT Sản xuất chương trình' },
+    { value: 'Trung tâm Truyền dẫn Phát sóng', label: 'TT Truyền dẫn Phát sóng' },
+    { value: 'Trung tâm Phát hình - Tư liệu', label: 'TT Phát hình - Tư liệu' },
+    { value: 'Trung tâm Dịch vụ truyền thông', label: 'TT Dịch vụ truyền thông' },
+];
+
+function buildDepartmentOptionsHtml(selectedVal = '') {
+    return DEPARTMENT_OPTIONS.map(opt => {
+        const isSel = (opt.value && opt.value.toLowerCase() === (selectedVal || '').toLowerCase()) ? 'selected' : '';
+        return `<option value="${escapeHtml(opt.value)}" ${isSel}>${escapeHtml(opt.label)}</option>`;
+    }).join('');
+}
+
+function addAssignedUnitRow(containerId, selectClass, selectedVal = '') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'assigned-unit-row';
+    row.innerHTML = `
+        <select class="form-select ${selectClass}">
+            ${buildDepartmentOptionsHtml(selectedVal)}
+        </select>
+        <button type="button" class="btn-remove-unit" title="Xóa đơn vị này" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
+}
 
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', () => {
@@ -102,7 +153,7 @@ function showLoggedIn(user) {
     // Phân quyền hiển thị
     const isAdmin  = isAdminUser();
     const isVPD    = isVpdUser();
-    const canStandalone = isAdmin || isBanTgdUser();
+    const canStandalone = isAdmin || isBanTgdUser() || isVPD;
 
     const badge = document.getElementById('loggedUserRole');
     let displayLabel = 'Nhân viên';
@@ -117,6 +168,8 @@ function showLoggedIn(user) {
 
     document.getElementById('adminUserMgmtBtn').style.display = isAdmin ? '' : 'none';
     document.getElementById('addMeetingBtn').style.display = isVPD ? '' : 'none';
+    const addMeetingDirectiveBtn = document.getElementById('addMeetingDirectiveBtn');
+    if (addMeetingDirectiveBtn) addMeetingDirectiveBtn.style.display = canStandalone ? '' : 'none';
     document.getElementById('addEventBtn').style.display = isVPD ? '' : 'none';
     document.getElementById('addPropagandaBtn').style.display = isVPD ? '' : 'none';
     document.getElementById('addStandaloneDirectiveBtn').style.display = canStandalone ? '' : 'none';
@@ -131,6 +184,8 @@ function showLoggedOut() {
     document.getElementById('authLogged').style.display = 'none';
     document.getElementById('adminUserMgmtBtn').style.display = 'none';
     document.getElementById('addMeetingBtn').style.display = 'none';
+    const addMeetingDirectiveBtn = document.getElementById('addMeetingDirectiveBtn');
+    if (addMeetingDirectiveBtn) addMeetingDirectiveBtn.style.display = 'none';
     document.getElementById('addEventBtn').style.display = 'none';
     document.getElementById('addPropagandaBtn').style.display = 'none';
     document.getElementById('addStandaloneDirectiveBtn').style.display = 'none';
@@ -208,6 +263,8 @@ function bindEvents() {
 
     // Directives
     document.getElementById('directiveFormSubmit').addEventListener('click', handleDirectiveSubmit);
+    const dfAddDeptBtn = document.getElementById('dfAddDeptBtn');
+    if (dfAddDeptBtn) dfAddDeptBtn.addEventListener('click', () => addAssignedUnitRow('dfAssignedList', 'df-assigned-select'));
 
     // Events
     document.getElementById('addEventBtn').addEventListener('click', () => openEventModal());
@@ -238,9 +295,29 @@ function bindEvents() {
     const expPpBtn = document.getElementById('exportPropagandaBtn');
     if (expPpBtn) expPpBtn.addEventListener('click', handleExportPropaganda);
 
+    const ppMonthSelect = document.getElementById('ppMonthSelect');
+    const ppYearInput = document.getElementById('ppYearInput');
+    if (ppMonthSelect) ppMonthSelect.addEventListener('change', onMonthModeSelectChange);
+    if (ppYearInput) ppYearInput.addEventListener('input', onMonthModeSelectChange);
+
+    // Nút Thêm chỉ đạo tại mục Biên bản họp giao ban
+    const addMeetingDirBtn = document.getElementById('addMeetingDirectiveBtn');
+    if (addMeetingDirBtn) {
+        addMeetingDirBtn.addEventListener('click', () => {
+            if (cachedMeetings && cachedMeetings.length > 0) {
+                openDirectiveModal(cachedMeetings[0].MeetingID);
+            } else {
+                openStandaloneDirectiveModal();
+            }
+        });
+    }
+
     // Standalone Directive (Chỉ đạo ngoài họp)
-    document.getElementById('addStandaloneDirectiveBtn').addEventListener('click', () => openStandaloneDirectiveModal());
+    const addStandDirBtn = document.getElementById('addStandaloneDirectiveBtn');
+    if (addStandDirBtn) addStandDirBtn.addEventListener('click', () => openStandaloneDirectiveModal());
     document.getElementById('standaloneDirectiveFormSubmit').addEventListener('click', handleStandaloneDirectiveSubmit);
+    const sdAddDeptBtn = document.getElementById('sdAddDeptBtn');
+    if (sdAddDeptBtn) sdAddDeptBtn.addEventListener('click', () => addAssignedUnitRow('sdAssignedList', 'sd-assigned-select'));
 
     // User Management
     document.getElementById('adminUserMgmtBtn').addEventListener('click', () => { openModal('userMgmtModal'); loadUsers(); });
@@ -269,6 +346,7 @@ function bindEvents() {
 
     document.getElementById('heroFilterDept').addEventListener('change', (e) => {
         heroDirectiveFilter.department = e.target.value;
+        heroDirectivePage = 1;
         loadHeroDirectives();
     });
 
@@ -317,6 +395,7 @@ function handleLogout() {
 function setHeroDirectiveFilter(mode, dateVal = '') {
     heroDirectiveFilter.mode = mode;
     heroDirectiveFilter.date = dateVal;
+    heroDirectivePage = 1; // Reset trang về 1 khi đổi bộ lọc
 
     // Cập nhật trạng thái nút bấm
     const btn2Days = document.getElementById('heroFilter2DaysBtn');
@@ -341,6 +420,7 @@ function resetHeroDirectiveFilter() {
         date: '',
         department: ''
     };
+    heroDirectivePage = 1;
     document.getElementById('heroFilterDept').value = '';
     document.getElementById('heroFilterDate').value = '';
     setHeroDirectiveFilter('2days');
@@ -348,6 +428,9 @@ function resetHeroDirectiveFilter() {
 
 async function loadHeroDirectives() {
     const listContainer = document.getElementById('heroDirectiveList');
+    const paginationContainer = document.getElementById('heroDirectivePagination');
+    if (paginationContainer) paginationContainer.style.display = 'none';
+
     listContainer.innerHTML = `<li class="empty-state"><div class="loading-spinner">Đang tải dữ liệu chỉ đạo...</div></li>`;
 
     try {
@@ -377,9 +460,11 @@ async function loadHeroDirectives() {
         
         if (!Array.isArray(directives)) {
             console.warn('API returned non-array:', directives);
+            cachedHeroDirectives = [];
             renderHeroDirectives([]);
             return;
         }
+        cachedHeroDirectives = directives;
         renderHeroDirectives(directives);
     } catch (e) {
         console.error('Error loading directives:', e);
@@ -387,9 +472,61 @@ async function loadHeroDirectives() {
     }
 }
 
+function changeHeroDirectivePage(page) {
+    heroDirectivePage = page;
+    renderHeroDirectives(cachedHeroDirectives);
+    const heroSection = document.getElementById('heroDirectives');
+    if (heroSection) {
+        heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function renderDirectivePagination(totalPages, totalDates, totalItems) {
+    const container = document.getElementById('heroDirectivePagination');
+    if (!container) return;
+
+    if (totalPages <= 1) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    const startItem = (heroDirectivePage - 1) * HERO_DIRECTIVES_PER_PAGE + 1;
+    const endItem = Math.min(heroDirectivePage * HERO_DIRECTIVES_PER_PAGE, totalDates);
+
+    let pagesHtml = '';
+    for (let p = 1; p <= totalPages; p++) {
+        if (p === 1 || p === totalPages || (p >= heroDirectivePage - 1 && p <= heroDirectivePage + 1)) {
+            pagesHtml += `<button type="button" class="pagination-page ${p === heroDirectivePage ? 'active' : ''}" onclick="changeHeroDirectivePage(${p})">${p}</button>`;
+        } else if (p === heroDirectivePage - 2 || p === heroDirectivePage + 2) {
+            pagesHtml += `<span class="pagination-ellipsis">...</span>`;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="pagination-info">
+            Hiển thị ngày <strong>${startItem} - ${endItem}</strong> trong tổng số <strong>${totalDates} ngày</strong> (${totalItems} chỉ đạo / kết luận)
+        </div>
+        <div class="pagination-controls">
+            <button type="button" class="pagination-btn" ${heroDirectivePage <= 1 ? 'disabled' : ''} onclick="changeHeroDirectivePage(${heroDirectivePage - 1})">
+                ◀ Trước
+            </button>
+            <div class="pagination-pages">
+                ${pagesHtml}
+            </div>
+            <button type="button" class="pagination-btn" ${heroDirectivePage >= totalPages ? 'disabled' : ''} onclick="changeHeroDirectivePage(${heroDirectivePage + 1})">
+                Sau ▶
+            </button>
+        </div>
+    `;
+}
+
 function renderHeroDirectives(directives) {
     const listContainer = document.getElementById('heroDirectiveList');
     const badge = document.getElementById('directiveDateBadge');
+    const paginationContainer = document.getElementById('heroDirectivePagination');
 
     // Cập nhật text badge mô tả bộ lọc hiện tại
     if (heroDirectiveFilter.mode === '2days') {
@@ -412,6 +549,7 @@ function renderHeroDirectives(directives) {
             <div class="icon">📋</div>
             <p>Không có chỉ đạo nào phù hợp với bộ lọc đã chọn</p>
         </li>`;
+        if (paginationContainer) paginationContainer.style.display = 'none';
         return;
     }
 
@@ -424,9 +562,20 @@ function renderHeroDirectives(directives) {
     });
 
     const sortedDates = Object.keys(grouped).sort().reverse();
+    const totalDates = sortedDates.length;
+    const totalPages = Math.ceil(totalDates / HERO_DIRECTIVES_PER_PAGE);
+
+    if (heroDirectivePage > totalPages) {
+        heroDirectivePage = Math.max(1, totalPages);
+    }
+
+    // Phân trang danh sách các ngày
+    const startIndex = (heroDirectivePage - 1) * HERO_DIRECTIVES_PER_PAGE;
+    const endIndex = Math.min(startIndex + HERO_DIRECTIVES_PER_PAGE, totalDates);
+    const pagedDates = sortedDates.slice(startIndex, endIndex);
 
     let html = '';
-    sortedDates.forEach(dateStr => {
+    pagedDates.forEach(dateStr => {
         const items = grouped[dateStr];
         html += `
         <div class="directive-date-group">
@@ -450,7 +599,7 @@ function renderHeroDirectives(directives) {
             <li class="directive-item" style="animation-delay: ${i * 0.05}s">
                 <div class="directive-bullet"></div>
                 <div class="directive-content">
-                    ${d.AssignedTo ? `<span class="assigned">Giao ${escapeHtml(d.AssignedTo)}</span>` : ''}
+                    ${d.AssignedTo ? `<span class="assigned">Giao ${escapeHtml(d.AssignedTo)}:</span>` : ''}
                     <span>${formatContent(d.Content)}</span>
                     <div class="directive-meta">
                         <span class="directive-tag" style="background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">${categoryLabel}</span>
@@ -471,6 +620,7 @@ function renderHeroDirectives(directives) {
     });
 
     listContainer.innerHTML = html;
+    renderDirectivePagination(totalPages, totalDates, directives.length);
 }
 
 // ===================== EVENTS =====================
@@ -1060,31 +1210,22 @@ async function deleteReport(meetingId, reportId) {
 
 // ===================== DIRECTIVE CRUD =====================
 function openDirectiveModal(meetingId, directive) {
-    document.getElementById('dfMeetingId').value = meetingId;
+    if (!meetingId && (!directive || !directive.MeetingID)) {
+        openStandaloneDirectiveModal(directive);
+        return;
+    }
+    const mId = meetingId || (directive ? directive.MeetingID : '');
+    document.getElementById('dfMeetingId').value = mId;
     document.getElementById('dfDirectiveId').value = directive ? directive.DirectiveID : '';
     document.getElementById('dfCategory').value = directive ? directive.Category : 'ket_luan';
     document.getElementById('dfContent').value = directive ? directive.Content : '';
     
-    // Gán giá trị đơn vị được giao cho dropdown
-    const assignedSelect = document.getElementById('dfAssignedTo');
-    const assignedVal = directive ? (directive.AssignedTo || '') : '';
-    if (assignedVal) {
-        let matched = false;
-        for (let i = 0; i < assignedSelect.options.length; i++) {
-            if (assignedSelect.options[i].value.toLowerCase() === assignedVal.toLowerCase() || 
-                assignedSelect.options[i].text.toLowerCase() === assignedVal.toLowerCase()) {
-                assignedSelect.selectedIndex = i;
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) {
-            const opt = new Option(assignedVal, assignedVal);
-            assignedSelect.add(opt);
-            assignedSelect.value = assignedVal;
-        }
-    } else {
-        assignedSelect.value = '';
+    // Gán danh sách đơn vị được giao
+    const listContainer = document.getElementById('dfAssignedList');
+    if (listContainer) {
+        listContainer.innerHTML = '';
+        const assignedVal = directive ? (directive.AssignedTo || '') : '';
+        addAssignedUnitRow('dfAssignedList', 'df-assigned-select', assignedVal);
     }
 
     document.getElementById('dfDeadline').value = directive ? (directive.Deadline || '') : '';
@@ -1105,34 +1246,81 @@ async function editDirective(meetingId, directiveId) {
 async function handleDirectiveSubmit() {
     const meetingId = document.getElementById('dfMeetingId').value;
     const directiveId = document.getElementById('dfDirectiveId').value;
-    const data = {
-        category: document.getElementById('dfCategory').value,
-        content: document.getElementById('dfContent').value.trim(),
-        assignedTo: document.getElementById('dfAssignedTo').value.trim() || null,
-        deadline: document.getElementById('dfDeadline').value || null,
-        priority: parseInt(document.getElementById('dfPriority').value) || 0
-    };
+    const category = document.getElementById('dfCategory').value;
+    const content = document.getElementById('dfContent').value.trim();
+    const deadline = document.getElementById('dfDeadline').value || null;
+    const priority = parseInt(document.getElementById('dfPriority').value) || 0;
 
-    if (!data.content) {
+    if (!content) {
         showToast('Vui lòng nhập nội dung chỉ đạo', 'warning');
         return;
     }
 
+    // Thu thập danh sách các đơn vị được chọn
+    const assignedSelects = document.querySelectorAll('#dfAssignedList .df-assigned-select');
+    const assignedUnits = [];
+    assignedSelects.forEach(s => {
+        const val = s.value.trim();
+        if (val && !assignedUnits.includes(val)) {
+            assignedUnits.push(val);
+        }
+    });
+
+    // Nếu không chọn đơn vị nào, để null (Toàn Đài / Chung cho các Ban)
+    if (assignedUnits.length === 0) {
+        assignedUnits.push(null);
+    }
+
     try {
-        const url = directiveId 
-            ? `/api/meetings/${meetingId}/directives/${directiveId}` 
-            : `/api/meetings/${meetingId}/directives`;
-        const method = directiveId ? 'PUT' : 'POST';
-        const resp = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await resp.json();
-        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
-        showToast(result.message, 'success');
+        if (directiveId) {
+            // Khi sửa chỉ đạo cụ thể: cập nhật đơn vị đầu tiên
+            const data = {
+                category,
+                content,
+                assignedTo: assignedUnits[0] || null,
+                deadline,
+                priority
+            };
+            const resp = await fetch(`/api/meetings/${meetingId}/directives/${directiveId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await resp.json();
+            if (!resp.ok) { showToast(result.detail || 'Lỗi cập nhật', 'error'); return; }
+            showToast(result.message || 'Cập nhật chỉ đạo thành công!', 'success');
+        } else {
+            // Khi thêm mới: tạo chỉ đạo cho từng đơn vị đã chọn
+            let successCount = 0;
+            for (const unit of assignedUnits) {
+                const data = {
+                    category,
+                    content,
+                    assignedTo: unit,
+                    deadline,
+                    priority
+                };
+                const resp = await fetch(`/api/meetings/${meetingId}/directives`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (resp.ok) {
+                    successCount++;
+                }
+            }
+
+            if (successCount > 1) {
+                showToast(`Đã thêm chỉ đạo cho ${successCount} đơn vị thành công!`, 'success');
+            } else if (successCount === 1) {
+                showToast('Thêm chỉ đạo thành công!', 'success');
+            } else {
+                showToast('Không thể thêm chỉ đạo. Vui lòng thử lại.', 'error');
+                return;
+            }
+        }
+
         closeModal('directiveModal');
-        
         loadHeroDirectives();
         const card = document.getElementById(`meeting-${meetingId}`);
         if (card && card.classList.contains('expanded')) {
@@ -1140,7 +1328,7 @@ async function handleDirectiveSubmit() {
             toggleMeeting(meetingId);
         }
     } catch (e) {
-        showToast('Lỗi kết nối', 'error');
+        showToast('Lỗi kết nối máy chủ', 'error');
     }
 }
 
@@ -1171,25 +1359,12 @@ function openStandaloneDirectiveModal(directive) {
     document.getElementById('sdDeadline').value = directive ? (directive.Deadline || '') : '';
     document.getElementById('sdPriority').value = directive ? (directive.Priority || 0) : 0;
     
-    // Giao cho
-    const assignedSelect = document.getElementById('sdAssignedTo');
-    const assignedVal = directive ? (directive.AssignedTo || '') : '';
-    if (assignedVal) {
-        let matched = false;
-        for (let i = 0; i < assignedSelect.options.length; i++) {
-            if (assignedSelect.options[i].value.toLowerCase() === assignedVal.toLowerCase()) {
-                assignedSelect.selectedIndex = i;
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) {
-            const opt = new Option(assignedVal, assignedVal);
-            assignedSelect.add(opt);
-            assignedSelect.value = assignedVal;
-        }
-    } else {
-        assignedSelect.value = '';
+    // Gán danh sách đơn vị được giao
+    const listContainer = document.getElementById('sdAssignedList');
+    if (listContainer) {
+        listContainer.innerHTML = '';
+        const assignedVal = directive ? (directive.AssignedTo || '') : '';
+        addAssignedUnitRow('sdAssignedList', 'sd-assigned-select', assignedVal);
     }
 
     document.getElementById('standaloneDirectiveModalTitle').textContent = directive ? 'Sửa chỉ đạo ngoài họp' : 'Thêm chỉ đạo ngoài họp';
@@ -1197,7 +1372,6 @@ function openStandaloneDirectiveModal(directive) {
 }
 
 async function editStandaloneDirective(directiveId) {
-    // Lấy thông tin directive từ API directives hiện tại
     try {
         const resp = await fetch('/api/directives?mode=all');
         const directives = await resp.json();
@@ -1209,35 +1383,84 @@ async function editStandaloneDirective(directiveId) {
 
 async function handleStandaloneDirectiveSubmit() {
     const directiveId = document.getElementById('sdDirectiveId').value;
-    const data = {
-        category: document.getElementById('sdCategory').value,
-        content: document.getElementById('sdContent').value.trim(),
-        assignedTo: document.getElementById('sdAssignedTo').value.trim() || null,
-        directiveDate: document.getElementById('sdDirectiveDate').value,
-        deadline: document.getElementById('sdDeadline').value || null,
-        priority: parseInt(document.getElementById('sdPriority').value) || 0
-    };
+    const category = document.getElementById('sdCategory').value;
+    const content = document.getElementById('sdContent').value.trim();
+    const directiveDate = document.getElementById('sdDirectiveDate').value;
+    const deadline = document.getElementById('sdDeadline').value || null;
+    const priority = parseInt(document.getElementById('sdPriority').value) || 0;
 
-    if (!data.content) {
+    if (!content) {
         showToast('Vui lòng nhập nội dung chỉ đạo', 'warning');
         return;
     }
-    if (!data.directiveDate) {
+    if (!directiveDate) {
         showToast('Vui lòng chọn ngày chỉ đạo', 'warning');
         return;
     }
 
+    // Thu thập danh sách các đơn vị được chọn
+    const assignedSelects = document.querySelectorAll('#sdAssignedList .sd-assigned-select');
+    const assignedUnits = [];
+    assignedSelects.forEach(s => {
+        const val = s.value.trim();
+        if (val && !assignedUnits.includes(val)) {
+            assignedUnits.push(val);
+        }
+    });
+
+    if (assignedUnits.length === 0) {
+        assignedUnits.push(null);
+    }
+
     try {
-        const url = directiveId ? `/api/directives/${directiveId}` : '/api/directives';
-        const method = directiveId ? 'PUT' : 'POST';
-        const resp = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await resp.json();
-        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
-        showToast(result.message, 'success');
+        if (directiveId) {
+            const data = {
+                category,
+                content,
+                assignedTo: assignedUnits[0] || null,
+                directiveDate,
+                deadline,
+                priority
+            };
+            const resp = await fetch(`/api/directives/${directiveId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await resp.json();
+            if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+            showToast(result.message, 'success');
+        } else {
+            let successCount = 0;
+            for (const unit of assignedUnits) {
+                const data = {
+                    category,
+                    content,
+                    assignedTo: unit,
+                    directiveDate,
+                    deadline,
+                    priority
+                };
+                const resp = await fetch('/api/directives', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (resp.ok) {
+                    successCount++;
+                }
+            }
+
+            if (successCount > 1) {
+                showToast(`Đã thêm chỉ đạo cho ${successCount} đơn vị thành công!`, 'success');
+            } else if (successCount === 1) {
+                showToast('Thêm chỉ đạo thành công!', 'success');
+            } else {
+                showToast('Không thể thêm chỉ đạo. Vui lòng thử lại.', 'error');
+                return;
+            }
+        }
+
         closeModal('standaloneDirectiveModal');
         loadHeroDirectives();
     } catch (e) {
@@ -1352,6 +1575,24 @@ function renderPropagandaView(scrollToToday = false) {
     }
 }
 
+function isMonthlyPlan(p) {
+    if (!p || !p.PlanDate) return false;
+    const timeText = (p.EventTime || '').toLowerCase();
+    if (timeText.includes('dự kiến tháng') || timeText.includes('du kien thang') || timeText.includes('theo tháng')) {
+        return true;
+    }
+    const pStart = p.PlanDate;
+    const pEnd = p.PlanEndDate;
+    if (!pEnd) return false;
+    const startD = parseDbDate(pStart);
+    const endD = parseDbDate(pEnd);
+    if (!startD || !endD) return false;
+    const isFirstDay = startD.getDate() === 1;
+    const lastDayOfMonth = new Date(startD.getFullYear(), startD.getMonth() + 1, 0).getDate();
+    const isLastDay = (endD.getDate() === lastDayOfMonth) && (endD.getMonth() === startD.getMonth()) && (endD.getFullYear() === startD.getFullYear());
+    return isFirstDay && isLastDay;
+}
+
 function renderPropagandaTimeline(plans, scrollToToday = false) {
     const container = document.getElementById('propagandaTimelineContainer');
     if (!container) return;
@@ -1362,7 +1603,14 @@ function renderPropagandaTimeline(plans, scrollToToday = false) {
     const dayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
     const canEdit = isVpdUser();
 
-    let html = `
+    // Tách kế hoạch dự kiến theo tháng và kế hoạch ngày cụ thể
+    const monthlyPlans = (plans || []).filter(isMonthlyPlan);
+    const dailyPlans = (plans || []).filter(p => !isMonthlyPlan(p));
+
+    let html = '';
+
+    // 1. Khởi tạo Bảng Timeline
+    html += `
     <table class="pp-timeline-table">
         <thead>
             <tr>
@@ -1371,6 +1619,48 @@ function renderPropagandaTimeline(plans, scrollToToday = false) {
             </tr>
         </thead>
         <tbody>`;
+
+    // 2. Kế hoạch dự kiến theo tháng: hiển thị thành dòng ở đầu bảng với chiều dài ngang đầy đủ giống các ngày khác
+    if (monthlyPlans.length > 0) {
+        html += `
+        <tr class="pp-timeline-row pp-row-monthly">
+            <td class="pp-day-cell">
+                <div class="pp-day-text pp-day-monthly">
+                    <span style="font-weight: 700; color: var(--accent-amber);">Dự kiến</span>
+                    <span class="days-badge upcoming" style="font-size: 0.65rem; padding: 0 5px; background: var(--accent-amber-light); color: var(--accent-amber);">Tháng ${propagandaMonth + 1}/${propagandaYear}</span>
+                </div>
+            </td>
+            <td class="pp-content-cell">`;
+
+        monthlyPlans.forEach(p => {
+            const subParts = [];
+            if (p.AssignedUnit) subParts.push(`📺 ${escapeHtml(p.AssignedUnit)}`);
+            if (p.ExecutingUnit) subParts.push(`🏢 ${escapeHtml(p.ExecutingUnit)}`);
+            if (p.CooperatingUnit) subParts.push(`🤝 ${escapeHtml(p.CooperatingUnit)}`);
+            if (p.Location) subParts.push(`📍 ${escapeHtml(p.Location)}`);
+
+            html += `
+            <div class="pp-timeline-card pp-timeline-card-monthly" onclick="showPropagandaDetail(${p.PlanID})" title="Nhấp để xem chi tiết đầy đủ">
+                <div class="pp-card-main">
+                    <div class="pp-card-title">
+                        ${escapeHtml(p.ActivityName)}
+                        ${p.EventTime ? `<span class="pp-card-time">(${escapeHtml(p.EventTime)})</span>` : ''}
+                    </div>
+                    <div class="pp-card-sub">
+                        ${subParts.map(s => `<span>${s}</span>`).join('')}
+                        <span class="pp-card-tag" style="background:var(--accent-amber-light);color:var(--accent-amber);font-weight:600;">🗓️ Dự kiến trong tháng</span>
+                    </div>
+                </div>
+                ${canEdit ? `
+                <div class="pp-card-actions" onclick="event.stopPropagation()">
+                    <button class="btn-icon" onclick="editPropagandaPlan(${p.PlanID})" title="Sửa">✎</button>
+                    <button class="btn-icon btn-danger" onclick="deletePropagandaPlan(${p.PlanID})" title="Xóa">✕</button>
+                </div>` : ''}
+            </div>`;
+        });
+
+        html += `</td></tr>`;
+    }
 
     let hasTodayRow = false;
 
@@ -1386,8 +1676,8 @@ function renderPropagandaTimeline(plans, scrollToToday = false) {
 
         if (isToday) hasTodayRow = true;
 
-        // Lọc các kế hoạch diễn ra trong ngày này
-        const dayPlans = (plans || []).filter(p => {
+        // Lọc các kế hoạch ngày cụ thể diễn ra trong ngày này
+        const matchedPlans = dailyPlans.filter(p => {
             const start = p.PlanDate;
             const end = p.PlanEndDate || p.PlanDate;
             return dateStr >= start && dateStr <= end;
@@ -1412,10 +1702,10 @@ function renderPropagandaTimeline(plans, scrollToToday = false) {
 
         // Cột Nội dung / Kế hoạch
         html += `<td class="pp-content-cell">`;
-        if (dayPlans.length === 0) {
+        if (matchedPlans.length === 0) {
             html += `<div class="pp-empty-cell"></div>`;
         } else {
-            dayPlans.forEach(p => {
+            matchedPlans.forEach(p => {
                 const subParts = [];
                 if (p.AssignedUnit) subParts.push(`📺 ${escapeHtml(p.AssignedUnit)}`);
                 if (p.ExecutingUnit) subParts.push(`🏢 ${escapeHtml(p.ExecutingUnit)}`);
@@ -1484,19 +1774,30 @@ function renderPropagandaGrid(plans) {
     const canEdit = isVpdUser();
     let html = '';
     plans.forEach(p => {
-        const dateStr = formatDbDateVi(p.PlanDate);
-        const endStr = p.PlanEndDate ? formatDbDateVi(p.PlanEndDate) : '';
-        const dateRange = endStr && endStr !== dateStr ? `${dateStr} → ${endStr}` : dateStr;
-
-        // Tính ngày còn lại
-        const today = new Date(); today.setHours(0,0,0,0);
-        const planD = parseDbDate(p.PlanDate);
-        const diffDays = planD ? Math.ceil((planD - today) / 86400000) : null;
+        const isMonthly = isMonthlyPlan(p);
+        let dateRange = '';
         let daysLabel = '';
-        if (diffDays !== null) {
-            if (diffDays === 0) daysLabel = '<span class="days-badge today">Hôm nay</span>';
-            else if (diffDays === 1) daysLabel = '<span class="days-badge soon">Ngày mai</span>';
-            else if (diffDays > 0) daysLabel = `<span class="days-badge upcoming">Còn ${diffDays} ngày</span>`;
+
+        if (isMonthly) {
+            const startD = parseDbDate(p.PlanDate);
+            const mNum = startD ? (startD.getMonth() + 1) : (propagandaMonth + 1);
+            const yNum = startD ? startD.getFullYear() : propagandaYear;
+            dateRange = `Dự kiến Tháng ${mNum}/${yNum}`;
+            daysLabel = `<span class="days-badge upcoming" style="background:var(--accent-amber-light);color:var(--accent-amber);">Dự kiến</span>`;
+        } else {
+            const dateStr = formatDbDateVi(p.PlanDate);
+            const endStr = p.PlanEndDate ? formatDbDateVi(p.PlanEndDate) : '';
+            dateRange = endStr && endStr !== dateStr ? `${dateStr} → ${endStr}` : dateStr;
+
+            // Tính ngày còn lại
+            const today = new Date(); today.setHours(0,0,0,0);
+            const planD = parseDbDate(p.PlanDate);
+            const diffDays = planD ? Math.ceil((planD - today) / 86400000) : null;
+            if (diffDays !== null) {
+                if (diffDays === 0) daysLabel = '<span class="days-badge today">Hôm nay</span>';
+                else if (diffDays === 1) daysLabel = '<span class="days-badge soon">Ngày mai</span>';
+                else if (diffDays > 0) daysLabel = `<span class="days-badge upcoming">Còn ${diffDays} ngày</span>`;
+            }
         }
 
         const shortLocation = truncateWords(p.Location, 10);
@@ -1524,6 +1825,7 @@ function renderPropagandaGrid(plans) {
                 <div class="propaganda-meta-row">
                     ${p.AssignedUnit ? `<span class="propaganda-tag unit">📺 ${escapeHtml(p.AssignedUnit)}</span>` : ''}
                     ${p.CooperatingUnit ? `<span class="propaganda-tag coop">🤝 ${escapeHtml(p.CooperatingUnit)}</span>` : ''}
+                    ${isMonthly ? `<span class="propaganda-tag" style="background:var(--accent-amber-light);color:var(--accent-amber);font-weight:600;">Dự kiến theo tháng</span>` : ''}
                 </div>
 
                 ${p.EventTime ? `<div class="propaganda-meta-item"><span class="icon">⏰</span><span class="text">${escapeHtml(p.EventTime)}</span></div>` : ''}
@@ -1549,10 +1851,21 @@ async function showPropagandaDetail(planId) {
         const resp = await fetch(`/api/propaganda-plans/${planId}`);
         if (!resp.ok) { showToast('Không tìm thấy kế hoạch', 'error'); return; }
         const p = await resp.json();
+        const isMonthly = isMonthlyPlan(p);
+
+        let dateDisplay = '';
+        if (isMonthly) {
+            const startD = parseDbDate(p.PlanDate);
+            const mNum = startD ? (startD.getMonth() + 1) : '';
+            const yNum = startD ? startD.getFullYear() : '';
+            dateDisplay = `Dự kiến Tháng ${mNum}/${yNum}`;
+        } else {
+            dateDisplay = p.PlanEndDate ? `${formatDbDateVi(p.PlanDate)} → ${formatDbDateVi(p.PlanEndDate)}` : formatDbDateVi(p.PlanDate);
+        }
 
         const rows = [
-            ['📅 Ngày', p.PlanEndDate ? `${formatDbDateVi(p.PlanDate)} → ${formatDbDateVi(p.PlanEndDate)}` : formatDbDateVi(p.PlanDate)],
-            ['⏰ Thời gian', p.EventTime],
+            ['📅 Thời gian thực hiện', dateDisplay],
+            ['⏰ Chi tiết thời gian', p.EventTime],
             ['🏛️ Danh nghĩa tổ chức', p.Organizer],
             ['🏢 Đơn vị thực hiện', p.ExecutingUnit],
             ['📍 Địa điểm', p.Location],
@@ -1586,11 +1899,49 @@ async function showPropagandaDetail(planId) {
     }
 }
 
+function setPropagandaDateModeUI(mode) {
+    const hiddenInput = document.getElementById('ppDateModeHidden');
+    const tabExact = document.getElementById('ppTabExact');
+    const tabMonth = document.getElementById('ppTabMonth');
+    const exactGroup = document.getElementById('ppExactDateGroup');
+    const monthGroup = document.getElementById('ppMonthDateGroup');
+    const eventTimeInput = document.getElementById('ppEventTime');
+
+    if (mode === 'month') {
+        if (hiddenInput) hiddenInput.value = 'month';
+        if (tabMonth) tabMonth.className = 'btn btn-sm btn-secondary active';
+        if (tabExact) tabExact.className = 'btn btn-sm btn-ghost';
+        if (exactGroup) exactGroup.style.display = 'none';
+        if (monthGroup) monthGroup.style.display = 'flex';
+
+        const m = document.getElementById('ppMonthSelect') ? document.getElementById('ppMonthSelect').value : (propagandaMonth + 1);
+        const y = document.getElementById('ppYearInput') ? document.getElementById('ppYearInput').value : propagandaYear;
+        if (eventTimeInput && (!eventTimeInput.value || eventTimeInput.value.startsWith('Dự kiến tháng') || eventTimeInput.value.startsWith('Dự kiến Tháng'))) {
+            eventTimeInput.value = `Dự kiến tháng ${m} năm ${y}`;
+        }
+    } else {
+        if (hiddenInput) hiddenInput.value = 'exact';
+        if (tabExact) tabExact.className = 'btn btn-sm btn-secondary active';
+        if (tabMonth) tabMonth.className = 'btn btn-sm btn-ghost';
+        if (exactGroup) exactGroup.style.display = 'flex';
+        if (monthGroup) monthGroup.style.display = 'none';
+    }
+}
+
+function onMonthModeSelectChange() {
+    const hiddenInput = document.getElementById('ppDateModeHidden');
+    if (!hiddenInput || hiddenInput.value !== 'month') return;
+    const m = document.getElementById('ppMonthSelect').value;
+    const y = document.getElementById('ppYearInput').value;
+    const eventTimeInput = document.getElementById('ppEventTime');
+    if (eventTimeInput && (!eventTimeInput.value || eventTimeInput.value.startsWith('Dự kiến tháng') || eventTimeInput.value.startsWith('Dự kiến Tháng'))) {
+        eventTimeInput.value = `Dự kiến tháng ${m} năm ${y}`;
+    }
+}
+
 function openPropagandaModal(plan) {
     document.getElementById('ppPlanId').value = plan ? plan.PlanID : '';
     document.getElementById('ppActivityName').value = plan ? plan.ActivityName : '';
-    document.getElementById('ppPlanDate').value = plan ? (plan.PlanDate || '') : '';
-    document.getElementById('ppPlanEndDate').value = plan ? (plan.PlanEndDate || '') : '';
     document.getElementById('ppEventTime').value = plan ? (plan.EventTime || '') : '';
     document.getElementById('ppOrganizer').value = plan ? (plan.Organizer || '') : '';
     document.getElementById('ppExecutingUnit').value = plan ? (plan.ExecutingUnit || '') : '';
@@ -1598,7 +1949,30 @@ function openPropagandaModal(plan) {
     document.getElementById('ppAssignedUnit').value = plan ? (plan.AssignedUnit || '') : '';
     document.getElementById('ppCooperatingUnit').value = plan ? (plan.CooperatingUnit || '') : '';
     document.getElementById('ppNotes').value = plan ? (plan.Notes || '') : '';
-    document.getElementById('propagandaModalTitle').textContent = plan ? 'Sửa kế hoạch tuyên truyền' : 'Thêm kế hoạch tuyên truyền';
+
+    if (plan) {
+        document.getElementById('propagandaModalTitle').textContent = 'Sửa kế hoạch tuyên truyền';
+        if (isMonthlyPlan(plan)) {
+            const startD = parseDbDate(plan.PlanDate);
+            if (startD) {
+                document.getElementById('ppMonthSelect').value = String(startD.getMonth() + 1);
+                document.getElementById('ppYearInput').value = String(startD.getFullYear());
+            }
+            setPropagandaDateModeUI('month');
+        } else {
+            document.getElementById('ppPlanDate').value = plan.PlanDate || '';
+            document.getElementById('ppPlanEndDate').value = plan.PlanEndDate || '';
+            setPropagandaDateModeUI('exact');
+        }
+    } else {
+        document.getElementById('propagandaModalTitle').textContent = 'Thêm kế hoạch tuyên truyền';
+        document.getElementById('ppPlanDate').value = toDbDate(new Date());
+        document.getElementById('ppPlanEndDate').value = '';
+        document.getElementById('ppMonthSelect').value = String(propagandaMonth + 1);
+        document.getElementById('ppYearInput').value = String(propagandaYear);
+        setPropagandaDateModeUI('exact');
+    }
+
     openModal('propagandaModal');
 }
 
@@ -1614,16 +1988,50 @@ async function editPropagandaPlan(planId) {
 async function handlePropagandaSubmit() {
     const planId = document.getElementById('ppPlanId').value;
     const activityName = document.getElementById('ppActivityName').value.trim();
-    const planDate = document.getElementById('ppPlanDate').value;
+    const isMonthMode = document.getElementById('ppDateModeHidden') && (document.getElementById('ppDateModeHidden').value === 'month');
 
-    if (!activityName) { showToast('Vui lòng nhập tên hoạt động', 'warning'); return; }
-    if (!planDate) { showToast('Vui lòng chọn ngày bắt đầu', 'warning'); return; }
+    if (!activityName) {
+        showToast('Vui lòng nhập tên hoạt động', 'warning');
+        return;
+    }
+
+    let planDate = '';
+    let planEndDate = null;
+    let eventTime = document.getElementById('ppEventTime').value.trim() || null;
+    let monthNum = null;
+    let yearNum = null;
+
+    if (isMonthMode) {
+        const m = parseInt(document.getElementById('ppMonthSelect').value);
+        const y = parseInt(document.getElementById('ppYearInput').value);
+        if (!y || isNaN(y)) {
+            showToast('Vui lòng nhập năm hợp lệ', 'warning');
+            return;
+        }
+        monthNum = m;
+        yearNum = y;
+        const lastDay = new Date(y, m, 0).getDate();
+        planDate = `${y}-${String(m).padStart(2, '0')}-01`;
+        planEndDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        if (!eventTime) {
+            eventTime = `Dự kiến tháng ${m} năm ${y}`;
+        }
+    } else {
+        planDate = document.getElementById('ppPlanDate').value;
+        planEndDate = document.getElementById('ppPlanEndDate').value || null;
+        if (!planDate) {
+            showToast('Vui lòng chọn ngày bắt đầu', 'warning');
+            return;
+        }
+    }
 
     const data = {
         activityName,
         planDate,
-        planEndDate: document.getElementById('ppPlanEndDate').value || null,
-        eventTime: document.getElementById('ppEventTime').value.trim() || null,
+        planEndDate,
+        month: monthNum,
+        year: yearNum,
+        eventTime,
         organizer: document.getElementById('ppOrganizer').value.trim() || null,
         executingUnit: document.getElementById('ppExecutingUnit').value.trim() || null,
         location: document.getElementById('ppLocation').value.trim() || null,
@@ -1644,6 +2052,16 @@ async function handlePropagandaSubmit() {
         if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
         showToast(result.message, 'success');
         closeModal('propagandaModal');
+
+        // Tự động chuyển timeline đến đúng tháng của kế hoạch mới tạo/sửa
+        if (data.planDate) {
+            const d = parseDbDate(data.planDate);
+            if (d) {
+                propagandaYear = d.getFullYear();
+                propagandaMonth = d.getMonth();
+            }
+        }
+
         loadPropagandaPlans();
     } catch (e) {
         showToast('Lỗi kết nối', 'error');

@@ -669,12 +669,12 @@ def api_get_all_directives(
 
 @app.post("/api/directives")
 def api_create_standalone_directive(req: StandaloneDirectiveCreateRequest, request: Request):
-    """API tạo chỉ đạo ngoài cuộc họp (Ban Tổng Giám đốc)."""
+    """API tạo chỉ đạo ngoài cuộc họp (Ban Tổng Giám đốc / Văn phòng Đài / Admin)."""
     user = get_current_user(request)
     if not user.get("logged_in"):
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
-    if not is_bantgd_user(user) and not is_admin_user(user):
-        raise HTTPException(status_code=403, detail="Chỉ Ban Tổng Giám đốc hoặc Admin mới có quyền thêm chỉ đạo ngoài cuộc họp.")
+    if not is_bantgd_user(user) and not is_admin_user(user) and not is_vpd_user(user):
+        raise HTTPException(status_code=403, detail="Chỉ Ban Tổng Giám đốc, Văn phòng Đài hoặc Admin mới có quyền thêm chỉ đạo ngoài cuộc họp.")
 
     directive_date = req.directive_date or None
     if directive_date:
@@ -698,7 +698,7 @@ def api_update_standalone_directive(directive_id: int, req: DirectiveUpdateReque
     user = get_current_user(request)
     if not user.get("logged_in"):
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
-    if not is_bantgd_user(user) and not is_admin_user(user):
+    if not is_bantgd_user(user) and not is_admin_user(user) and not is_vpd_user(user):
         raise HTTPException(status_code=403, detail="Không có quyền sửa chỉ đạo này.")
 
     update_data = {}
@@ -727,7 +727,7 @@ def api_update_standalone_directive(directive_id: int, req: DirectiveUpdateReque
 def api_delete_standalone_directive(directive_id: int, request: Request):
     """API xóa chỉ đạo ngoài cuộc họp."""
     user = get_current_user(request)
-    if not is_bantgd_user(user) and not is_admin_user(user):
+    if not is_bantgd_user(user) and not is_admin_user(user) and not is_vpd_user(user):
         raise HTTPException(status_code=403, detail="Không có quyền xóa chỉ đạo này.")
     success = db_service.delete_directive(directive_id)
     if not success:
@@ -894,8 +894,10 @@ class PropagandaPlanCreateRequest(BaseModel):
     assigned_unit: Optional[str] = Field(None, alias="assignedUnit")
     cooperating_unit: Optional[str] = Field(None, alias="cooperatingUnit")
     notes: Optional[str] = None
-    plan_date: str = Field(..., alias="planDate")
+    plan_date: Optional[str] = Field(None, alias="planDate")
     plan_end_date: Optional[str] = Field(None, alias="planEndDate")
+    month: Optional[int] = None
+    year: Optional[int] = None
 
     class Config:
         populate_by_name = True
@@ -912,6 +914,8 @@ class PropagandaPlanUpdateRequest(BaseModel):
     notes: Optional[str] = None
     plan_date: Optional[str] = Field(None, alias="planDate")
     plan_end_date: Optional[str] = Field(None, alias="planEndDate")
+    month: Optional[int] = None
+    year: Optional[int] = None
 
     class Config:
         populate_by_name = True
@@ -1073,6 +1077,20 @@ def api_create_propaganda_plan(req: PropagandaPlanCreateRequest, request: Reques
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
     if not is_vpd_user(user):
         raise HTTPException(status_code=403, detail="Chỉ BPT Văn phòng Đài hoặc Admin mới có quyền thêm kế hoạch tuyên truyền.")
+    
+    plan_date_str = req.plan_date
+    plan_end_date_str = req.plan_end_date
+
+    # Nếu chỉ truyền tháng và năm
+    if (not plan_date_str) and req.month and req.year:
+        import calendar
+        last_day = calendar.monthrange(req.year, req.month)[1]
+        plan_date_str = f"{req.year:04d}-{req.month:02d}-01"
+        plan_end_date_str = f"{req.year:04d}-{req.month:02d}-{last_day:02d}"
+
+    if not plan_date_str:
+        raise HTTPException(status_code=400, detail="Vui lòng cung cấp ngày hoặc tháng/năm kế hoạch.")
+
     plan_id = db_service.create_propaganda_plan(
         activity_name=req.activity_name,
         organizer=req.organizer,
@@ -1082,8 +1100,8 @@ def api_create_propaganda_plan(req: PropagandaPlanCreateRequest, request: Reques
         assigned_unit=req.assigned_unit,
         cooperating_unit=req.cooperating_unit,
         notes=req.notes,
-        plan_date=parse_date(req.plan_date),
-        plan_end_date=parse_date(req.plan_end_date) if req.plan_end_date else None,
+        plan_date=parse_date(plan_date_str),
+        plan_end_date=parse_date(plan_end_date_str) if plan_end_date_str else None,
         created_by=user.get("username"),
     )
     return {"success": True, "message": "Thêm kế hoạch tuyên truyền thành công!", "plan_id": plan_id}
@@ -1113,10 +1131,17 @@ def api_update_propaganda_plan(plan_id: int, req: PropagandaPlanUpdateRequest, r
         update_data["CooperatingUnit"] = req.cooperating_unit
     if req.notes is not None:
         update_data["Notes"] = req.notes
-    if req.plan_date is not None:
-        update_data["PlanDate"] = parse_date(req.plan_date)
-    if req.plan_end_date is not None:
-        update_data["PlanEndDate"] = parse_date(req.plan_end_date) if req.plan_end_date else None
+
+    if req.month and req.year and not req.plan_date:
+        import calendar
+        last_day = calendar.monthrange(req.year, req.month)[1]
+        update_data["PlanDate"] = parse_date(f"{req.year:04d}-{req.month:02d}-01")
+        update_data["PlanEndDate"] = parse_date(f"{req.year:04d}-{req.month:02d}-{last_day:02d}")
+    else:
+        if req.plan_date is not None:
+            update_data["PlanDate"] = parse_date(req.plan_date)
+        if req.plan_end_date is not None:
+            update_data["PlanEndDate"] = parse_date(req.plan_end_date) if req.plan_end_date else None
     success = db_service.update_propaganda_plan(plan_id, **update_data)
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy kế hoạch.")
