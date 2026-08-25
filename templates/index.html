@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Ban HTV</title>
     <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
-    <link rel="stylesheet" href="/static/css/style.css?v=5">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
     <!-- Script chống flash trắng/đen khi load -->
     <script>
         (function() {
@@ -73,6 +73,41 @@
             </div>
         </header>
 
+        <!-- Broadcast Financial-style Ticker Banner (Chữ chạy ngang đầu trang) -->
+        <section class="ticker-banner-section" id="tickerBannerSection">
+            <div class="ticker-banner-container">
+                <div class="ticker-badge" id="tickerBadge">
+                    <span class="ticker-live-dot"></span>
+                    <span class="ticker-badge-title">THÔNG BÁO</span>
+                </div>
+                <div class="ticker-marquee-wrapper" id="tickerMarqueeWrapper" title="Nhấn vào banner để xem toàn bộ nội dung & sao chép">
+                    <div class="ticker-marquee-content" id="tickerMarqueeContent">
+                        <span class="ticker-item ticker-placeholder">Đang tải thông báo giao ban...</span>
+                    </div>
+                </div>
+                <div class="ticker-controls">
+                    <button class="btn-ticker-action" id="bannerCreateBtn" style="display: none;" title="Tạo thông báo Banner mới (Dành cho Trưởng ban / Admin)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Tạo banner</span>
+                    </button>
+                    <button class="btn-ticker-action" id="bannerListBtn" title="Xem danh sách các banner & lịch sử">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                        <span>Danh sách</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
         <!-- Main Content -->
         <div class="main-content">
             <!-- HERO: Chỉ đạo TGĐ (Mặc định hôm nay & hôm qua, hỗ trợ lọc theo Ban & Ngày) -->
@@ -93,7 +128,13 @@
                         <span class="filter-label">Thời gian:</span>
                         <button class="btn btn-sm btn-secondary active" id="heroFilter2DaysBtn" title="Xem chỉ đạo hôm nay và hôm qua">Hôm nay & Hôm qua</button>
                         <button class="btn btn-sm btn-ghost" id="heroFilter7DaysBtn" title="Xem chỉ đạo trong 7 ngày gần nhất">7 ngày qua</button>
-                        <button class="btn btn-sm btn-ghost" id="heroFilterAllDaysBtn" title="Xem tất cả chỉ đạo từ trước đến nay">Tất cả ngày</button>
+                        <div class="hero-month-selector" id="heroMonthSelector">
+                            <button type="button" class="month-nav-btn" id="heroMonthPrevBtn" title="Tháng trước">‹</button>
+                            <button type="button" class="month-label-btn" id="heroFilterMonthBtn" title="Xem chỉ đạo theo tháng">
+                                <span id="heroMonthLabel">Tháng 8/2026</span>
+                            </button>
+                            <button type="button" class="month-nav-btn" id="heroMonthNextBtn" title="Tháng sau">›</button>
+                        </div>
                         <input type="date" class="form-input" id="heroFilterDate" style="width: 145px; padding: 5px 10px; font-size: 0.8rem;" title="Chọn ngày cụ thể để xem">
                     </div>
 
@@ -273,8 +314,8 @@
         </div>
     </div>
 
-    <!-- Comments Section -->
-    <section class="comments-section" id="commentsSection">
+    <!-- Comments Section (Tạm thời ẩn theo yêu cầu) -->
+    <section class="comments-section" id="commentsSection" style="display: none !important;">
         <div class="section-header" style="flex-wrap: wrap; gap: 12px;">
             <div class="section-title">
                 <div class="icon" style="background: #f3e8ff; color: #7c3aed;">💬</div>
@@ -491,77 +532,76 @@
                                 <option value="y_kien_tgd">Ý kiến Ban TGĐ</option>
                             </select>
                         </div>
-                    <div class="form-row" id="dfAssignCoopRow">
-                        <div class="form-group">
-                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
-                                <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
-                                <button type="button" class="btn-text-action" id="dfAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
-                            </div>
-                            <div id="dfAssignedList" class="assigned-units-container">
-                                <div class="assigned-unit-row">
-                                    <select class="form-select df-assigned-select">
-                                        <option value="">-- Toàn Đài / Chung cho các Ban --</option>
-                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                        <option value="Ban Chương trình">Ban Chương trình</option>
-                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                    </select>
-                                </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                            <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
+                            <button type="button" class="btn-text-action" id="dfAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
+                        </div>
+                        <div id="dfAssignedList" class="assigned-units-container">
+                            <div class="assigned-unit-row">
+                                <select class="form-select df-assigned-select">
+                                    <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                    <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                    <option value="Ban Chương trình">Ban Chương trình</option>
+                                    <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                    <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                    <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                    <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                    <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                    <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                    <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                    <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                    <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                    <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                    <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                    <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                    <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                    <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                    <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                    <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                    <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                    <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                    <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                    <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                    <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
-                                <label class="form-label" style="margin-bottom: 0; color: #7c3aed;">Đơn vị phối hợp</label>
-                                <button type="button" class="btn-text-action" id="dfAddCoopBtn" style="color:#7c3aed" title="Thêm đơn vị phối hợp">+ Đơn vị phối hợp</button>
-                            </div>
-                            <div id="dfCoopList" class="assigned-units-container">
-                                <div class="assigned-unit-row coop-row">
-                                    <select class="form-select df-coop-select" style="border-color: #c4b5fd;">
-                                        <option value="">-- Không có đơn vị phối hợp --</option>
-                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                        <option value="Ban Chương trình">Ban Chương trình</option>
-                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                    </select>
-                                </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                            <label class="form-label" style="margin-bottom: 0; color: #7c3aed;">Đơn vị phối hợp</label>
+                            <button type="button" class="btn-text-action" id="dfAddCoopBtn" style="color:#7c3aed" title="Thêm đơn vị phối hợp">+ Đơn vị phối hợp</button>
+                        </div>
+                        <div id="dfCoopList" class="assigned-units-container">
+                            <div class="assigned-unit-row coop-row">
+                                <select class="form-select df-coop-select" style="border-color: #c4b5fd;">
+                                    <option value="">-- Không có đơn vị phối hợp --</option>
+                                    <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                    <option value="Ban Chương trình">Ban Chương trình</option>
+                                    <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                    <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                    <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                    <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                    <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                    <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                    <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                    <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                    <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                    <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                    <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                    <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                    <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                    <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                    <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                    <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                    <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                    <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                    <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                    <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                    <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -779,77 +819,75 @@
                             </select>
                         </div>
                     </div>
-                    <div class="form-row" id="sdAssignCoopRow">
-                        <div class="form-group">
-                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
-                                <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
-                                <button type="button" class="btn-text-action" id="sdAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
-                            </div>
-                            <div id="sdAssignedList" class="assigned-units-container">
-                                <div class="assigned-unit-row">
-                                    <select class="form-select sd-assigned-select">
-                                        <option value="">-- Toàn Đài / Chung cho các Ban --</option>
-                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                        <option value="Ban Chương trình">Ban Chương trình</option>
-                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                    </select>
-                                </div>
+                    <div class="form-group">
+                        <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                            <label class="form-label" style="margin-bottom: 0;">Giao cho (đơn vị)</label>
+                            <button type="button" class="btn-text-action" id="sdAddDeptBtn" title="Thêm đơn vị được giao">+ Giao thêm đơn vị</button>
+                        </div>
+                        <div id="sdAssignedList" class="assigned-units-container">
+                            <div class="assigned-unit-row">
+                                <select class="form-select sd-assigned-select">
+                                    <option value="">-- Toàn Đài / Chung cho các Ban --</option>
+                                    <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                    <option value="Ban Chương trình">Ban Chương trình</option>
+                                    <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                    <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                    <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                    <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                    <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                    <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                    <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                    <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                    <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                    <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                    <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                    <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                    <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                    <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                    <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                    <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                    <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                    <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                    <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                    <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                    <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
-                                <label class="form-label" style="margin-bottom: 0; color: #7c3aed;">Đơn vị phối hợp</label>
-                                <button type="button" class="btn-text-action" id="sdAddCoopBtn" style="color:#7c3aed" title="Thêm đơn vị phối hợp">+ Đơn vị phối hợp</button>
-                            </div>
-                            <div id="sdCoopList" class="assigned-units-container">
-                                <div class="assigned-unit-row coop-row">
-                                    <select class="form-select sd-coop-select" style="border-color: #c4b5fd;">
-                                        <option value="">-- Không có đơn vị phối hợp --</option>
-                                        <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
-                                        <option value="Ban Chương trình">Ban Chương trình</option>
-                                        <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                        <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                        <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                        <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                        <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                        <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                        <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                        <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
-                                        <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                        <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                        <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                        <option value="Văn phòng Đài">Văn phòng Đài</option>
-                                        <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                        <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                        <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                        <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                        <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                        <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                        <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                        <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                        <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                    </select>
-                                </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                            <label class="form-label" style="margin-bottom: 0; color: #7c3aed;">Đơn vị phối hợp</label>
+                            <button type="button" class="btn-text-action" id="sdAddCoopBtn" style="color:#7c3aed" title="Thêm đơn vị phối hợp">+ Đơn vị phối hợp</button>
+                        </div>
+                        <div id="sdCoopList" class="assigned-units-container">
+                            <div class="assigned-unit-row coop-row">
+                                <select class="form-select sd-coop-select" style="border-color: #c4b5fd;">
+                                    <option value="">-- Không có đơn vị phối hợp --</option>
+                                    <option value="Các Trưởng Ban">Các Trưởng Ban / Đơn vị</option>
+                                    <option value="Ban Chương trình">Ban Chương trình</option>
+                                    <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                    <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                    <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                    <option value="Ban Chuyên đề">Ban Chuyên đề</option>
+                                    <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                    <option value="Ban Khoa giáo">Ban Khoa giáo</option>
+                                    <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                    <option value="Hãng phim Truyền hình (TFS)">Hãng phim Truyền hình (TFS)</option>
+                                    <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
+                                    <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                    <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                    <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                    <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                    <option value="Ban Chiến lược">Ban Chiến lược</option>
+                                    <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                    <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                    <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
+                                    <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                    <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                    <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                    <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -942,6 +980,135 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=5"></script>
+    <!-- Pending Comments Approval Modal (Tạm thời ẩn) -->
+    <div class="modal-overlay" id="pendingCommentsModal" style="display: none !important;">
+        <div class="modal" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3>⏳ Bình luận chờ duyệt (<span id="pendingModalCount">0</span>)</h3>
+                <button class="modal-close" onclick="closeModal('pendingCommentsModal')">✕</button>
+            </div>
+            <div class="modal-body" id="pendingCommentsModalBody" style="max-height: 480px; overflow-y: auto;">
+                <div class="loading-spinner">Đang tải bình luận chờ duyệt...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('pendingCommentsModal')">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner Detail & Copy Popup Modal -->
+    <div class="modal-overlay" id="bannerDetailModal">
+        <div class="modal banner-detail-modal" style="max-width: 650px;">
+            <div class="modal-header">
+                <div class="banner-modal-title">
+                    <span class="banner-modal-icon">📢</span>
+                    <h3 id="bannerDetailTitle">Thông báo Banner</h3>
+                </div>
+                <button class="modal-close" onclick="closeModal('bannerDetailModal')">✕</button>
+            </div>
+            <div class="modal-body" id="bannerDetailBody">
+                <div class="banner-meta-badge-row" id="bannerDetailMeta">
+                    <span class="badge badge-primary" id="bannerDetailDept">--</span>
+                    <span class="badge badge-info" id="bannerDetailDates">--</span>
+                    <span class="badge badge-secondary" id="bannerDetailAuthor">--</span>
+                </div>
+                <div class="banner-content-box" id="bannerDetailContent"></div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button class="btn btn-secondary" onclick="closeModal('bannerDetailModal')">Đóng</button>
+                <button class="btn btn-primary btn-copy-banner" id="bannerCopyBtn" onclick="copyBannerDetailText()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span id="bannerCopyBtnText">Sao chép nội dung</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner Create / Edit Modal -->
+    <div class="modal-overlay" id="bannerFormModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 id="bannerFormModalTitle">Tạo thông báo Banner</h3>
+                <button class="modal-close" onclick="closeModal('bannerFormModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="bannerForm" onsubmit="event.preventDefault();">
+                    <input type="hidden" id="bannerEditId" value="">
+                    <div class="form-group">
+                        <label class="form-label">Nội dung thông báo <span class="required">*</span></label>
+                        <textarea class="form-textarea" id="bannerFormContent" rows="4" placeholder="Nhập nội dung thông tin sẽ chạy trên banner..." required></textarea>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 12px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Ngày bắt đầu chạy <span class="required">*</span></label>
+                            <input type="date" class="form-input" id="bannerFormStartDate" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Ngày kết thúc chạy <span class="required">*</span></label>
+                            <input type="date" class="form-input" id="bannerFormEndDate" required>
+                        </div>
+                    </div>
+                    <div class="form-help-text" style="font-size: 0.82rem; color: var(--text-muted, #64748b); margin-top: -4px;">
+                        💡 Thông báo sẽ tự động hiển thị từ ngày bắt đầu và ngưng hiển thị sau ngày kết thúc.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+                <button class="btn btn-secondary" onclick="closeModal('bannerFormModal')">Hủy</button>
+                <button class="btn btn-secondary" id="bannerSaveDraftBtn" onclick="submitBannerForm(false)">Lưu bản nháp</button>
+                <button class="btn btn-primary" id="bannerPublishBtn" onclick="submitBannerForm(true)">🚀 Công bố ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner List & Management Modal -->
+    <div class="modal-overlay" id="bannerListModal">
+        <div class="modal modal-lg" style="max-width: 980px;">
+            <div class="modal-header">
+                <div class="flex items-center gap-2">
+                    <span style="font-size: 1.25rem;">📋</span>
+                    <h3>Danh sách Thông báo Banner</h3>
+                </div>
+                <button class="modal-close" onclick="closeModal('bannerListModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Filter Bar -->
+                <div class="banner-list-filter-bar">
+                    <div class="filter-item">
+                        <label>Từ ngày:</label>
+                        <input type="date" class="form-input form-input-sm" id="bannerFilterStartDate">
+                    </div>
+                    <div class="filter-item">
+                        <label>Đến ngày:</label>
+                        <input type="date" class="form-input form-input-sm" id="bannerFilterEndDate">
+                    </div>
+                    <div class="filter-item">
+                        <label>Trạng thái:</label>
+                        <select class="form-select form-select-sm" id="bannerFilterStatus">
+                            <option value="">Tất cả</option>
+                            <option value="Published">Đã công bố</option>
+                            <option value="Draft">Bản nháp</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="loadBannerList()">🔍 Lọc</button>
+                    <button class="btn btn-sm btn-ghost" onclick="resetBannerListFilter()">Đặt lại</button>
+                    <button class="btn btn-sm btn-primary" id="bannerListCreateBtn" style="margin-left: auto; display: none;" onclick="openBannerCreateModal()">+ Tạo banner</button>
+                </div>
+
+                <!-- Table List Container -->
+                <div class="banner-table-container" id="bannerTableContainer" style="margin-top: 16px; max-height: 480px; overflow-y: auto;">
+                    <div class="loading-spinner">Đang tải danh sách banner...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('bannerListModal')">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>

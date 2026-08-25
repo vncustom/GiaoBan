@@ -1177,34 +1177,48 @@ async def post_heartbeat():
 
 # ===================== COMMENTS =====================
 
+def is_bpt_user(user: dict) -> bool:
+    """Ban Phụ Trách = Admin, BanTGD, hoặc truong_ban / pho_ban / truong_phong / pho_phong / BPT."""
+    if not user or not user.get("logged_in"):
+        return False
+    if is_admin_user(user) or is_bantgd_user(user):
+        return True
+    return is_ban_phu_trach(user)
+
+
 class CommentCreateRequest(BaseModel):
     directive_id: Optional[int] = Field(None, alias="directiveId")
-    comment_text: str = Field(..., alias="commentText")
+    comment_text: Optional[str] = Field(None, alias="commentText")
+    text: Optional[str] = None
 
     class Config:
         populate_by_name = True
+        extra = "allow"
 
 
 def can_approve_comment(user: dict, comment_dept: Optional[str]) -> bool:
     """Kiểm tra quyền duyệt comment.
-    - Admin, BanTGD, truong_ban của Văn phòng Đài: duyệt tất cả
-    - truong_ban của đơn vị X: chỉ duyệt của đơn vị mình
+    - Admin, BanTGD, BPT của Văn phòng Đài: duyệt tất cả
+    - BPT / Trưởng đơn vị của đơn vị X: duyệt của đơn vị mình hoặc comment không gán đơn vị
     """
-    if not user.get("logged_in"):
+    if not user or not user.get("logged_in"):
         return False
     if is_admin_user(user) or is_bantgd_user(user):
         return True
-    vai_tro = (user.get("vai_tro") or "").lower()
-    dept = (user.get("department") or "").lower()
-    # truong_ban của Văn phòng Đài → duyệt tất cả
-    is_vpd = any(k in dept for k in ["văn phòng đài", "van phong dai", "vpd", "vpđ"])
-    if vai_tro == "truong_ban" and is_vpd:
+    
+    if not is_ban_phu_trach(user):
+        return False
+
+    dept = (user.get("department") or "").strip().lower()
+    is_vpd = any(k in dept for k in ["văn phòng đài", "van phong dai", "vpd", "vpđ", "văn phòng"])
+    if is_vpd:
         return True
-    # truong_ban khác: chỉ duyệt của đơn vị mình
-    if vai_tro == "truong_ban" and comment_dept:
-        comment_dept_lower = (comment_dept or "").lower()
-        return dept == comment_dept_lower or dept in comment_dept_lower or comment_dept_lower in dept
-    return False
+    
+    # Nếu comment không có dept hoặc comment_dept khớp với dept của user
+    if not comment_dept or not str(comment_dept).strip():
+        return True
+    cd = str(comment_dept).strip().lower()
+    return dept == cd or dept in cd or cd in dept
 
 
 @app.get("/api/comments")
@@ -1213,25 +1227,38 @@ def api_get_comments(
     directive_id: Optional[int] = None,
     filter: Optional[str] = None,  # 'week', 'month', or None
 ):
-    """Lấy danh sách comments. Chỉ trả pending cho người có quyện."""
+    """Lấy danh sách comments."""
     user = get_current_user(request)
     comments = db_service.get_comments(
         directive_id=directive_id,
         filter_period=filter,
     )
 
-    # Lọc: chỉ trả approved + pending của chính mình + pending của đơn vị (nếu có quyền duyệt)
+    # Lọc: trả approved (hoặc status rỗng) + pending của chính mình + pending của đơn vị nếu có quyền duyệt
     result = []
-    current_username = (user.get("username") or "").lower() if user.get("logged_in") else ""
+    current_username = (user.get("username") or "").strip().lower() if user.get("logged_in") else ""
     for c in comments:
-        if c.get("Status") == "approved":
+        status = (c.get("Status") or "approved").strip().lower()
+        if status != "pending":
             result.append(c)
         elif user.get("logged_in"):
-            is_author = (c.get("AuthorUsername") or "").lower() == current_username
+            is_author = (c.get("AuthorUsername") or "").strip().lower() == current_username
             can_approve = can_approve_comment(user, c.get("Department"))
             if is_author or can_approve:
                 result.append(c)
     return result
+
+
+@app.get("/api/comments/pending")
+def api_get_pending_comments(request: Request):
+    """Lấy danh sách các comment đang chờ duyệt mà user có quyền duyệt."""
+    user = get_current_user(request)
+    if not user.get("logged_in") or not is_bpt_user(user):
+        return []
+    
+    comments = db_service.get_comments()
+    pending = [c for c in comments if (c.get("Status") or "").strip().lower() == "pending" and can_approve_comment(user, c.get("Department"))]
+    return pending
 
 
 @app.post("/api/comments")
@@ -1241,12 +1268,16 @@ def api_create_comment(req: CommentCreateRequest, request: Request):
     if not user.get("logged_in"):
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để bình luận.")
 
+    content = (req.comment_text or req.text or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Vui lòng nhập nội dung bình luận.")
+
     comment_id = db_service.create_comment(
         directive_id=req.directive_id,
-        comment_text=req.comment_text,
+        comment_text=content,
         author_username=user.get("username"),
         author_name=user.get("full_name") or user.get("username"),
-        department=user.get("department"),
+        department=user.get("department") or "",
     )
     return {"success": True, "message": "Bình luận đã gửi, chờ duyệt!", "comment_id": comment_id}
 
@@ -1267,15 +1298,15 @@ def api_approve_comment(comment_id: int, request: Request):
     if not can_approve_comment(user, comment.get("Department")):
         raise HTTPException(status_code=403, detail="Bạn không có quyền duyệt bình luận này.")
 
-    success = db_service.approve_comment(comment_id, user.get("username"))
+    success = db_service.approve_comment(comment_id, user.get("username") or "system")
     if not success:
         raise HTTPException(status_code=404, detail="Không thể duyệt bình luận.")
     return {"success": True, "message": "Đã duyệt bình luận!"}
 
 
-@app.delete("/api/comments/{comment_id}")
-def api_delete_comment(comment_id: int, request: Request):
-    """Xóa comment (admin hoặc chính tác giả)."""
+@app.put("/api/comments/{comment_id}/reject")
+def api_reject_comment(comment_id: int, request: Request):
+    """Từ chối / Không duyệt comment."""
     user = get_current_user(request)
     if not user.get("logged_in"):
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
@@ -1285,7 +1316,28 @@ def api_delete_comment(comment_id: int, request: Request):
     if not comment:
         raise HTTPException(status_code=404, detail="Không tìm thấy bình luận.")
 
-    is_author = (comment.get("AuthorUsername") or "").lower() == (user.get("username") or "").lower()
+    if not can_approve_comment(user, comment.get("Department")):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xử lý bình luận này.")
+
+    success = db_service.delete_comment(comment_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không thể từ chối bình luận.")
+    return {"success": True, "message": "Đã từ chối bình luận!"}
+
+
+@app.delete("/api/comments/{comment_id}")
+def api_delete_comment(comment_id: int, request: Request):
+    """Xóa comment (admin hoặc chính tác giả hoặc người có quyền duyệt)."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    comments = db_service.get_comments()
+    comment = next((c for c in comments if c.get("CommentID") == comment_id), None)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bình luận.")
+
+    is_author = (comment.get("AuthorUsername") or "").strip().lower() == (user.get("username") or "").strip().lower()
     if not is_author and not is_admin_user(user) and not can_approve_comment(user, comment.get("Department")):
         raise HTTPException(status_code=403, detail="Bạn không có quyền xóa bình luận này.")
 
@@ -1297,21 +1349,205 @@ def api_delete_comment(comment_id: int, request: Request):
 
 @app.get("/api/comments/pending-count")
 def api_get_pending_count(request: Request):
-    """Trả về số comment pending mà user hiện tại có quyền duyệt."""
-    user = get_current_user(request)
-    if not user.get("logged_in"):
-        return {"count": 0}
+    """Trả về số comment pending mà user hiện tại có quyền duyệt (hiện tạm ẩn)."""
+    return {"count": 0}
 
+
+# ===================== BANNERS (TICKER) =====================
+
+def can_manage_banner(user: dict) -> bool:
+    """Chỉ Trưởng ban (vai_tro='truong_ban' / BPT) hoặc Ban TGĐ / Admin mới được phép nhập liệu/quản lý banner."""
+    if not user or not user.get("logged_in"):
+        return False
     if is_admin_user(user) or is_bantgd_user(user):
-        count = db_service.get_pending_comment_count()
+        return True
+    return is_ban_phu_trach(user)
+
+
+class BannerCreateRequest(BaseModel):
+    content: str
+    start_date: str = Field(..., alias="startDate")
+    end_date: str = Field(..., alias="endDate")
+    status: Optional[str] = "Draft"
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+
+
+class BannerUpdateRequest(BaseModel):
+    content: Optional[str] = None
+    start_date: Optional[str] = Field(None, alias="startDate")
+    end_date: Optional[str] = Field(None, alias="endDate")
+    status: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+
+
+@app.get("/api/banners/active")
+def api_get_active_banners(date: Optional[str] = None):
+    """Lấy danh sách các banner đã công bố đang có hiệu lực trong ngày (công khai)."""
+    banners = db_service.get_active_banners(target_date=date)
+    return {"banners": banners}
+
+
+@app.get("/api/banners")
+def api_get_banners(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """Lấy danh sách banners có hỗ trợ lọc theo thời gian và trạng thái."""
+    banners = db_service.get_banners(start_date=start_date, end_date=end_date, status=status)
+    return {"banners": banners}
+
+
+@app.get("/api/banners/{banner_id}")
+def api_get_banner_detail(banner_id: int):
+    """Lấy chi tiết 1 banner."""
+    banner = db_service.get_banner_by_id(banner_id)
+    if not banner:
+        raise HTTPException(status_code=404, detail="Không tìm thấy banner.")
+    return banner
+
+
+@app.post("/api/banners")
+def api_create_banner(req: BannerCreateRequest, request: Request):
+    """Tạo banner mới (chỉ Trưởng ban, Ban TGĐ hoặc Admin)."""
+    user = get_current_user(request)
+    if not can_manage_banner(user):
+        raise HTTPException(status_code=403, detail="Chỉ Trưởng ban hoặc Quản trị viên mới được phép tạo banner thông báo.")
+
+    if not req.content or not req.content.strip():
+        raise HTTPException(status_code=400, detail="Vui lòng nhập nội dung banner.")
+    if not req.start_date or not req.start_date.strip():
+        raise HTTPException(status_code=400, detail="Vui lòng chọn ngày bắt đầu chạy.")
+    if not req.end_date or not req.end_date.strip():
+        raise HTTPException(status_code=400, detail="Vui lòng chọn ngày kết thúc chạy.")
+
+    # Đảm bảo format ngày YYYY-MM-DD
+    s_date = req.start_date.strip()[:10]
+    e_date = req.end_date.strip()[:10]
+    if s_date > e_date:
+        raise HTTPException(status_code=400, detail="Ngày bắt đầu không được lớn hơn ngày kết thúc.")
+
+    status = (req.status or "Draft").strip()
+    if status not in ["Draft", "Published"]:
+        status = "Draft"
+
+    username = user.get("username") or ""
+    fullname = user.get("fullname") or user.get("name") or user.get("display_name") or username
+    dept = user.get("department") or ""
+
+    banner_id = db_service.create_banner(
+        content=req.content.strip(),
+        start_date=s_date,
+        end_date=e_date,
+        created_by=username,
+        created_by_name=fullname,
+        department=dept,
+        status=status
+    )
+    return {
+        "success": True,
+        "message": "Công bố banner thành công!" if status == "Published" else "Đã lưu bản nháp banner!",
+        "banner_id": banner_id
+    }
+
+
+@app.put("/api/banners/{banner_id}")
+def api_update_banner(banner_id: int, req: BannerUpdateRequest, request: Request):
+    """Chỉnh sửa banner (Trưởng ban sửa banner nháp của mình, Admin sửa tất cả)."""
+    user = get_current_user(request)
+    if not can_manage_banner(user):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh sửa banner.")
+
+    banner = db_service.get_banner_by_id(banner_id)
+    if not banner:
+        raise HTTPException(status_code=404, detail="Không tìm thấy banner.")
+
+    is_author = (banner.get("CreatedBy") or "").strip().lower() == (user.get("username") or "").strip().lower()
+    is_admin = is_admin_user(user)
+
+    # Nếu đã công bố và không phải admin: không cho phép sửa nội dung đã công bố
+    if banner.get("Status") == "Published" and not is_admin:
+        raise HTTPException(status_code=403, detail="Banner đã công bố, chỉ Quản trị viên mới có quyền thay đổi.")
+
+    if not is_admin and not is_author:
+        raise HTTPException(status_code=403, detail="Bạn chỉ có thể chỉnh sửa banner do chính bạn tạo.")
+
+    s_date = req.start_date.strip()[:10] if req.start_date else None
+    e_date = req.end_date.strip()[:10] if req.end_date else None
+    if s_date and e_date and s_date > e_date:
+        raise HTTPException(status_code=400, detail="Ngày bắt đầu không được lớn hơn ngày kết thúc.")
+
+    success = db_service.update_banner(
+        banner_id=banner_id,
+        content=req.content,
+        start_date=s_date,
+        end_date=e_date,
+        status=req.status
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Không thể cập nhật banner.")
+
+    return {"success": True, "message": "Cập nhật banner thành công!"}
+
+
+@app.post("/api/banners/{banner_id}/publish")
+def api_publish_banner(banner_id: int, request: Request):
+    """Công bố banner."""
+    user = get_current_user(request)
+    if not can_manage_banner(user):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền công bố banner.")
+
+    banner = db_service.get_banner_by_id(banner_id)
+    if not banner:
+        raise HTTPException(status_code=404, detail="Không tìm thấy banner.")
+
+    is_author = (banner.get("CreatedBy") or "").strip().lower() == (user.get("username") or "").strip().lower()
+    if not is_admin_user(user) and not is_author:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền công bố banner của người khác.")
+
+    success = db_service.publish_banner(banner_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Không thể công bố banner.")
+
+    return {"success": True, "message": "Công bố banner thành công!"}
+
+
+@app.delete("/api/banners/{banner_id}")
+def api_delete_banner(banner_id: int, request: Request):
+    """Xóa banner:
+    - Khi đã công bố: CHỈ ADMIN mới có quyền xóa.
+    - Khi là bản nháp: Admin hoặc chính tác giả có quyền xóa.
+    """
+    user = get_current_user(request)
+    if not user or not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    banner = db_service.get_banner_by_id(banner_id)
+    if not banner:
+        raise HTTPException(status_code=404, detail="Không tìm thấy banner.")
+
+    is_admin = is_admin_user(user)
+    is_published = (banner.get("Status") or "").strip() == "Published"
+    is_author = (banner.get("CreatedBy") or "").strip().lower() == (user.get("username") or "").strip().lower()
+
+    if is_published:
+        if not is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Banner đã công bố! Trưởng ban không được phép xóa, chỉ Quản trị viên (Admin) mới có quyền xóa banner."
+            )
     else:
-        vai_tro = (user.get("vai_tro") or "").lower()
-        dept = (user.get("department") or "")
-        is_vpd = any(k in dept.lower() for k in ["văn phòng đài", "van phong dai", "vpd"])
-        if vai_tro == "truong_ban" and is_vpd:
-            count = db_service.get_pending_comment_count()
-        elif vai_tro == "truong_ban":
-            count = db_service.get_pending_comment_count(department=dept)
-        else:
-            count = 0
-    return {"count": count}
+        if not is_admin and not is_author:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền xóa bản nháp này.")
+
+    success = db_service.delete_banner(banner_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy banner cần xóa.")
+
+    return {"success": True, "message": "Xóa banner thành công!"}

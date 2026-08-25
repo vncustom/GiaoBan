@@ -234,6 +234,23 @@ def init_db():
             );
         """)
 
+        # 8. Bảng Banners - Banner chữ chạy ngang (Ticker)
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Banners')
+            CREATE TABLE Banners (
+                BannerID INT IDENTITY(1,1) PRIMARY KEY,
+                Content NVARCHAR(MAX) NOT NULL,
+                StartDate NVARCHAR(50) NOT NULL,
+                EndDate NVARCHAR(50) NOT NULL,
+                Status NVARCHAR(50) DEFAULT 'Draft',
+                CreatedBy NVARCHAR(255),
+                CreatedByName NVARCHAR(255),
+                Department NVARCHAR(255),
+                CreatedAt DATETIME DEFAULT GETDATE(),
+                UpdatedAt DATETIME DEFAULT GETDATE()
+            );
+        """)
+
         # Đảm bảo tài khoản Admin local luôn sẵn sàng
         cursor.execute("SELECT UserID FROM Users WHERE LOWER(Username) = 'admin'")
         admin_row = cursor.fetchone()
@@ -1270,6 +1287,164 @@ def get_pending_comment_count(department: Optional[str] = None) -> int:
             cursor.execute("SELECT COUNT(*) FROM DirectiveComments WHERE Status = 'pending'")
         count = cursor.fetchone()[0]
         return count
+    finally:
+        conn.close()
+
+
+# ===================== BANNERS (TICKER) =====================
+
+def create_banner(
+    content: str,
+    start_date: str,
+    end_date: str,
+    created_by: str,
+    created_by_name: str = "",
+    department: str = "",
+    status: str = "Draft"
+) -> int:
+    """Tạo banner thông báo chữ chạy ngang mới."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO Banners (Content, StartDate, EndDate, Status, CreatedBy, CreatedByName, Department, CreatedAt, UpdatedAt)
+            OUTPUT INSERTED.BannerID
+            VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE(), GETDATE())
+            """,
+            (content.strip(), start_date.strip(), end_date.strip(), status.strip(), created_by, created_by_name, department),
+        )
+        banner_id = cursor.fetchone()[0]
+        conn.commit()
+        return banner_id
+    finally:
+        conn.close()
+
+
+def get_banners(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Lấy danh sách banners có hỗ trợ lọc theo thời gian và trạng thái."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT * FROM Banners WHERE 1=1"
+        params = []
+
+        if status and status.strip():
+            query += " AND Status = ?"
+            params.append(status.strip())
+
+        if start_date and start_date.strip():
+            query += " AND EndDate >= ?"
+            params.append(start_date.strip())
+
+        if end_date and end_date.strip():
+            query += " AND StartDate <= ?"
+            params.append(end_date.strip())
+
+        query += " ORDER BY CreatedAt DESC, BannerID DESC"
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        return rows_to_dict_list(cursor, rows)
+    finally:
+        conn.close()
+
+
+def get_active_banners(target_date: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Lấy danh sách các banner đã công bố đang có hiệu lực trong ngày target_date."""
+    if not target_date or not str(target_date).strip():
+        target_date = datetime.date.today().isoformat()
+    else:
+        target_date = str(target_date).strip()[:10]
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM Banners
+            WHERE Status = 'Published'
+              AND StartDate <= ?
+              AND EndDate >= ?
+            ORDER BY CreatedAt ASC, BannerID ASC
+            """,
+            (target_date, target_date),
+        )
+        rows = cursor.fetchall()
+        return rows_to_dict_list(cursor, rows)
+    finally:
+        conn.close()
+
+
+def get_banner_by_id(banner_id: int) -> Optional[Dict[str, Any]]:
+    """Lấy chi tiết 1 banner theo ID."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Banners WHERE BannerID = ?", (banner_id,))
+        row = cursor.fetchone()
+        return row_to_dict(cursor, row)
+    finally:
+        conn.close()
+
+
+def update_banner(
+    banner_id: int,
+    content: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None
+) -> bool:
+    """Cập nhật thông tin banner."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        fields = []
+        params = []
+        if content is not None:
+            fields.append("Content = ?")
+            params.append(content.strip())
+        if start_date is not None:
+            fields.append("StartDate = ?")
+            params.append(start_date.strip())
+        if end_date is not None:
+            fields.append("EndDate = ?")
+            params.append(end_date.strip())
+        if status is not None:
+            fields.append("Status = ?")
+            params.append(status.strip())
+
+        if not fields:
+            return False
+
+        fields.append("UpdatedAt = GETDATE()")
+        params.append(banner_id)
+        sql = f"UPDATE Banners SET {', '.join(fields)} WHERE BannerID = ?"
+        cursor.execute(sql, tuple(params))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
+    finally:
+        conn.close()
+
+
+def publish_banner(banner_id: int) -> bool:
+    """Công bố banner (Status = 'Published')."""
+    return update_banner(banner_id, status="Published")
+
+
+def delete_banner(banner_id: int) -> bool:
+    """Xóa banner khỏi cơ sở dữ liệu."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM Banners WHERE BannerID = ?", (banner_id,))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
     finally:
         conn.close()
 

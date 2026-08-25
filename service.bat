@@ -13,6 +13,8 @@ set PYTHON_CMD=python
 
 if exist ".venv_%COMPUTERNAME%\Scripts\python.exe" (
     set PYTHON_CMD=".venv_%COMPUTERNAME%\Scripts\python.exe"
+) else if exist ".venv_PHTL-KT02\Scripts\python.exe" (
+    set PYTHON_CMD=".venv_PHTL-KT02\Scripts\python.exe"
 ) else if exist ".venv_PHTL-KTWEB\Scripts\python.exe" (
     set PYTHON_CMD=".venv_PHTL-KTWEB\Scripts\python.exe"
 ) else if exist ".venv\Scripts\python.exe" (

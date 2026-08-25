@@ -145,6 +145,25 @@ BEGIN
 END
 GO
 
+-- 8. Bảng Banners - Banner chữ chạy ngang (Ticker)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Banners')
+BEGIN
+    CREATE TABLE Banners (
+        BannerID INT IDENTITY(1,1) PRIMARY KEY,
+        Content NVARCHAR(MAX) NOT NULL,
+        StartDate NVARCHAR(50) NOT NULL,
+        EndDate NVARCHAR(50) NOT NULL,
+        Status NVARCHAR(50) DEFAULT 'Draft',
+        CreatedBy NVARCHAR(255),
+        CreatedByName NVARCHAR(255),
+        Department NVARCHAR(255),
+        CreatedAt DATETIME DEFAULT GETDATE(),
+        UpdatedAt DATETIME DEFAULT GETDATE()
+    );
+    PRINT N'Đã tạo bảng [Banners]';
+END
+GO
+
 -- Tạo tài khoản Admin mặc định
 IF NOT EXISTS (SELECT * FROM Users WHERE LOWER(Username) = 'admin')
 BEGIN
