@@ -76,6 +76,10 @@ from htv_sso_fastapi import _login_url
 # Cột 'role' SSO (admin/editor/user) dùng để xác định Admin toàn hệ thống.
 
 
+# User được cấp quyền đặc biệt tương đương Trưởng Ban Văn phòng Đài
+VPD_CHIEF_USERS = ["nguyenthithanhxuan", "phamthidong"]
+
+
 def is_admin_user(user: dict) -> bool:
     """Admin = SSO role='admin' HOẶC local DB role='Admin' HOẶC username='admin'."""
     username = (user.get("username") or "").strip().lower()
@@ -102,11 +106,12 @@ def is_bantgd_user(user: dict) -> bool:
 
 
 def is_ban_phu_trach(user: dict) -> bool:
-    """Ban Phụ Trách = truong_ban / pho_ban / truong_phong / pho_phong.
-    
-    Tương đương 'trưởng/phó đơn vị' — có quyền nhập báo cáo của ban mình.
-    Local login dùng role='BPT' cũng được tính.
-    """
+    """Ban Phụ Trách = truong_ban / pho_ban / truong_phong / pho_phong, hoặc user đặc biệt."""
+    if not user:
+        return False
+    username = (user.get("username") or "").strip().lower()
+    if username in VPD_CHIEF_USERS:
+        return True
     vai_tro = (user.get("vai_tro") or "").strip().lower()
     local_role = (user.get("role") or "").strip()
     return (
@@ -117,8 +122,13 @@ def is_ban_phu_trach(user: dict) -> bool:
 
 def is_vpd_user(user: dict) -> bool:
     """Có quyền quản lý cuộc họp / chỉ đạo:
-    Admin, BanTGD, hoặc Ban Phụ Trách của Văn Phòng Đài.
+    Admin, BanTGD, Ban Phụ Trách của Văn Phòng Đài, hoặc user được set quyền Trưởng Ban VPĐ.
     """
+    if not user:
+        return False
+    username = (user.get("username") or "").strip().lower()
+    if username in VPD_CHIEF_USERS:
+        return True
     if is_admin_user(user) or is_bantgd_user(user):
         return True
     dept = (user.get("department") or "").strip().lower()
@@ -129,7 +139,7 @@ def is_vpd_user(user: dict) -> bool:
 def can_edit_report(user: dict, report_dept: str) -> bool:
     """Kiểm tra quyền sửa báo cáo của một đơn vị.
     
-    - Admin/BanTGD/VPĐ BPT: sửa tất cả
+    - Admin/BanTGD/VPĐ BPT (kể cả nguyenthithanhxuan, phamthidong): sửa tất cả
     - BPT của đơn vị: chỉ sửa báo cáo của đơn vị mình
     """
     if is_admin_user(user) or is_bantgd_user(user):
@@ -196,6 +206,13 @@ def get_current_user(request: Request) -> dict:
     if not ban and raw_payload:
         ban = _extract_sso_department(raw_payload)
 
+    # Nếu là 2 user đặc biệt nguyenthithanhxuan hoặc phamthidong: gán ngang quyền Trưởng Ban Văn phòng Đài
+    if username.lower() in VPD_CHIEF_USERS:
+        if not ban:
+            ban = "Văn phòng Đài"
+        if vai_tro in ["nhan_vien", "user", "guest", ""]:
+            vai_tro = "truong_ban"
+
     # Chỉ đồng bộ user SSO vào DB, không ghi đè user local
     if username and username.lower() != "admin":
         db_service.save_or_update_sso_user(username, vai_tro, ban, force_update=True)
@@ -204,7 +221,7 @@ def get_current_user(request: Request) -> dict:
         "logged_in": True,
         "username": username,
         "full_name": full_name,
-        "vai_tro": vai_tro,       # vai_tro SSO nguyên gốc
+        "vai_tro": vai_tro,       # vai_tro SSO nguyên gốc hoặc được cấp quyền
         "sso_role": sso_role_col, # role SSO ('admin'/'editor'/'user')
         "role": sso_role_col,
         "department": ban,

@@ -251,6 +251,8 @@ function isBanTgdUser() {
     return vt.includes('tgd') || vt === 'bantgd' || role.includes('tgd') || role === 'bantgd' || un.includes('tgd') || un.includes('caoanhminh') || un.includes('diepbuuchi');
 }
 
+const VPD_CHIEF_USERS = ['nguyenthithanhxuan', 'phamthidong'];
+
 function isVpdDept(dept) {
     if (!dept) return false;
     const d = dept.toLowerCase();
@@ -259,6 +261,8 @@ function isVpdDept(dept) {
 
 function isVpdUser() {
     if (!currentUser) return false;
+    const un = (currentUser.username || '').toLowerCase();
+    if (VPD_CHIEF_USERS.includes(un)) return true;
     const vt = (currentUser.vai_tro || '').toLowerCase();
     const role = (currentUser.role || '');
     const dept = currentUser.department || '';
@@ -276,6 +280,7 @@ function canEditReport(reportDept, createdBy) {
     if (isAdminUser()) return true;
     if (isVpdUser()) return true;
     const un = (currentUser.username || '').toLowerCase();
+    if (VPD_CHIEF_USERS.includes(un)) return true;
     if (createdBy && un === (createdBy || '').toLowerCase()) return true;
     // BPT của bất kỳ ban nào có thể sửa báo cáo của ban mình
     const vt = (currentUser.vai_tro || '').toLowerCase();
