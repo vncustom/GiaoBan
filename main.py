@@ -271,6 +271,7 @@ class DirectiveCreateRequest(BaseModel):
     category: str = "ket_luan"
     content: str
     assigned_to: Optional[str] = Field(None, alias="assignedTo")
+    cooperating_unit: Optional[str] = Field(None, alias="cooperatingUnit")
     deadline: Optional[str] = None
     priority: int = 0
 
@@ -281,6 +282,7 @@ class DirectiveCreateRequest(BaseModel):
 class DirectiveUpdateRequest(BaseModel):
     content: Optional[str] = None
     assigned_to: Optional[str] = Field(None, alias="assignedTo")
+    cooperating_unit: Optional[str] = Field(None, alias="cooperatingUnit")
     deadline: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[int] = None
@@ -295,6 +297,7 @@ class StandaloneDirectiveCreateRequest(BaseModel):
     category: str = "y_kien_tgd"
     content: str
     assigned_to: Optional[str] = Field(None, alias="assignedTo")
+    cooperating_unit: Optional[str] = Field(None, alias="cooperatingUnit")
     deadline: Optional[str] = None
     priority: int = 0
     directive_date: Optional[str] = Field(None, alias="directiveDate")
@@ -684,6 +687,7 @@ def api_create_standalone_directive(req: StandaloneDirectiveCreateRequest, reque
         category=req.category,
         content=req.content,
         assigned_to=req.assigned_to,
+        cooperating_unit=req.cooperating_unit,
         deadline=parse_date(req.deadline) if req.deadline else None,
         priority=req.priority,
         directive_date=directive_date,
@@ -706,6 +710,8 @@ def api_update_standalone_directive(directive_id: int, req: DirectiveUpdateReque
         update_data["Content"] = req.content
     if req.assigned_to is not None:
         update_data["AssignedTo"] = req.assigned_to
+    if req.cooperating_unit is not None:
+        update_data["CooperatingUnit"] = req.cooperating_unit
     if req.deadline is not None:
         update_data["Deadline"] = parse_date(req.deadline) if req.deadline else None
     if req.status is not None:
@@ -770,6 +776,7 @@ def api_create_directive(meeting_id: int, req: DirectiveCreateRequest, request: 
         category=req.category,
         content=req.content,
         assigned_to=req.assigned_to,
+        cooperating_unit=getattr(req, 'cooperating_unit', None),
         deadline=req.deadline,
         priority=req.priority,
         created_by=user.get("username"),
@@ -790,6 +797,8 @@ def api_update_directive(meeting_id: int, directive_id: int, req: DirectiveUpdat
         update_data["Content"] = req.content
     if req.assigned_to is not None:
         update_data["AssignedTo"] = req.assigned_to
+    if req.cooperating_unit is not None:
+        update_data["CooperatingUnit"] = req.cooperating_unit
     if req.deadline is not None:
         update_data["Deadline"] = req.deadline
     if req.status is not None:
@@ -1164,3 +1173,145 @@ def api_delete_propaganda_plan(plan_id: int, request: Request):
 @app.post("/api/heartbeat")
 async def post_heartbeat():
     return {"status": "ok"}
+
+
+# ===================== COMMENTS =====================
+
+class CommentCreateRequest(BaseModel):
+    directive_id: Optional[int] = Field(None, alias="directiveId")
+    comment_text: str = Field(..., alias="commentText")
+
+    class Config:
+        populate_by_name = True
+
+
+def can_approve_comment(user: dict, comment_dept: Optional[str]) -> bool:
+    """Kiểm tra quyền duyệt comment.
+    - Admin, BanTGD, truong_ban của Văn phòng Đài: duyệt tất cả
+    - truong_ban của đơn vị X: chỉ duyệt của đơn vị mình
+    """
+    if not user.get("logged_in"):
+        return False
+    if is_admin_user(user) or is_bantgd_user(user):
+        return True
+    vai_tro = (user.get("vai_tro") or "").lower()
+    dept = (user.get("department") or "").lower()
+    # truong_ban của Văn phòng Đài → duyệt tất cả
+    is_vpd = any(k in dept for k in ["văn phòng đài", "van phong dai", "vpd", "vpđ"])
+    if vai_tro == "truong_ban" and is_vpd:
+        return True
+    # truong_ban khác: chỉ duyệt của đơn vị mình
+    if vai_tro == "truong_ban" and comment_dept:
+        comment_dept_lower = (comment_dept or "").lower()
+        return dept == comment_dept_lower or dept in comment_dept_lower or comment_dept_lower in dept
+    return False
+
+
+@app.get("/api/comments")
+def api_get_comments(
+    request: Request,
+    directive_id: Optional[int] = None,
+    filter: Optional[str] = None,  # 'week', 'month', or None
+):
+    """Lấy danh sách comments. Chỉ trả pending cho người có quyện."""
+    user = get_current_user(request)
+    comments = db_service.get_comments(
+        directive_id=directive_id,
+        filter_period=filter,
+    )
+
+    # Lọc: chỉ trả approved + pending của chính mình + pending của đơn vị (nếu có quyền duyệt)
+    result = []
+    current_username = (user.get("username") or "").lower() if user.get("logged_in") else ""
+    for c in comments:
+        if c.get("Status") == "approved":
+            result.append(c)
+        elif user.get("logged_in"):
+            is_author = (c.get("AuthorUsername") or "").lower() == current_username
+            can_approve = can_approve_comment(user, c.get("Department"))
+            if is_author or can_approve:
+                result.append(c)
+    return result
+
+
+@app.post("/api/comments")
+def api_create_comment(req: CommentCreateRequest, request: Request):
+    """Tạo comment mới (mọi user đăng nhập)."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để bình luận.")
+
+    comment_id = db_service.create_comment(
+        directive_id=req.directive_id,
+        comment_text=req.comment_text,
+        author_username=user.get("username"),
+        author_name=user.get("full_name") or user.get("username"),
+        department=user.get("department"),
+    )
+    return {"success": True, "message": "Bình luận đã gửi, chờ duyệt!", "comment_id": comment_id}
+
+
+@app.put("/api/comments/{comment_id}/approve")
+def api_approve_comment(comment_id: int, request: Request):
+    """Duyệt comment."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    # Lấy thông tin comment để kiểm tra quyền
+    comments = db_service.get_comments()
+    comment = next((c for c in comments if c.get("CommentID") == comment_id), None)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bình luận.")
+
+    if not can_approve_comment(user, comment.get("Department")):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền duyệt bình luận này.")
+
+    success = db_service.approve_comment(comment_id, user.get("username"))
+    if not success:
+        raise HTTPException(status_code=404, detail="Không thể duyệt bình luận.")
+    return {"success": True, "message": "Đã duyệt bình luận!"}
+
+
+@app.delete("/api/comments/{comment_id}")
+def api_delete_comment(comment_id: int, request: Request):
+    """Xóa comment (admin hoặc chính tác giả)."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    comments = db_service.get_comments()
+    comment = next((c for c in comments if c.get("CommentID") == comment_id), None)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bình luận.")
+
+    is_author = (comment.get("AuthorUsername") or "").lower() == (user.get("username") or "").lower()
+    if not is_author and not is_admin_user(user) and not can_approve_comment(user, comment.get("Department")):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xóa bình luận này.")
+
+    success = db_service.delete_comment(comment_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bình luận.")
+    return {"success": True, "message": "Đã xóa bình luận."}
+
+
+@app.get("/api/comments/pending-count")
+def api_get_pending_count(request: Request):
+    """Trả về số comment pending mà user hiện tại có quyền duyệt."""
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        return {"count": 0}
+
+    if is_admin_user(user) or is_bantgd_user(user):
+        count = db_service.get_pending_comment_count()
+    else:
+        vai_tro = (user.get("vai_tro") or "").lower()
+        dept = (user.get("department") or "")
+        is_vpd = any(k in dept.lower() for k in ["văn phòng đài", "van phong dai", "vpd"])
+        if vai_tro == "truong_ban" and is_vpd:
+            count = db_service.get_pending_comment_count()
+        elif vai_tro == "truong_ban":
+            count = db_service.get_pending_comment_count(department=dept)
+        else:
+            count = 0
+    return {"count": count}

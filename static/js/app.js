@@ -67,6 +67,14 @@ function buildDepartmentOptionsHtml(selectedVal = '') {
     }).join('');
 }
 
+function buildCoopOptionsHtml(selectedVal = '') {
+    const coopOpts = [{ value: '', label: '-- Không có đơn vị phối hợp --' }, ...DEPARTMENT_OPTIONS.slice(1)];
+    return coopOpts.map(opt => {
+        const isSel = (opt.value && opt.value.toLowerCase() === (selectedVal || '').toLowerCase()) ? 'selected' : '';
+        return `<option value="${escapeHtml(opt.value)}" ${isSel}>${escapeHtml(opt.label)}</option>`;
+    }).join('');
+}
+
 function addAssignedUnitRow(containerId, selectClass, selectedVal = '') {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -81,6 +89,23 @@ function addAssignedUnitRow(containerId, selectClass, selectedVal = '') {
     container.appendChild(row);
 }
 
+function addCoopUnitRow(containerId, selectClass, selectedVal = '') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'assigned-unit-row coop-row';
+    row.innerHTML = `
+        <select class="form-select ${selectClass}" style="border-color: #c4b5fd;">
+            ${buildCoopOptionsHtml(selectedVal)}
+        </select>
+        <button type="button" class="btn-remove-unit" title="Xóa đơn vị phối hợp" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+// Comment filter state
+let commentFilter = '';
+
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -89,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPropagandaPlans(true);
     loadEvents();
     loadMeetings();
+    loadComments();
     bindEvents();
 });
 
@@ -174,8 +200,15 @@ function showLoggedIn(user) {
     document.getElementById('addPropagandaBtn').style.display = isVPD ? '' : 'none';
     document.getElementById('addStandaloneDirectiveBtn').style.display = canStandalone ? '' : 'none';
 
+    // Show comment form
+    const commentFormWrapper = document.getElementById('commentFormWrapper');
+    if (commentFormWrapper) commentFormWrapper.style.display = '';
+
     // Tải lại biên bản để hiện các nút chức năng phù hợp
     loadMeetings();
+
+    // Check pending comments (for truong_ban)
+    checkPendingComments();
 }
 
 function showLoggedOut() {
@@ -265,6 +298,10 @@ function bindEvents() {
     document.getElementById('directiveFormSubmit').addEventListener('click', handleDirectiveSubmit);
     const dfAddDeptBtn = document.getElementById('dfAddDeptBtn');
     if (dfAddDeptBtn) dfAddDeptBtn.addEventListener('click', () => addAssignedUnitRow('dfAssignedList', 'df-assigned-select'));
+    const dfAddCoopBtn = document.getElementById('dfAddCoopBtn');
+    if (dfAddCoopBtn) dfAddCoopBtn.addEventListener('click', () => addCoopUnitRow('dfCoopList', 'df-coop-select'));
+    const sdAddCoopBtn = document.getElementById('sdAddCoopBtn');
+    if (sdAddCoopBtn) sdAddCoopBtn.addEventListener('click', () => addCoopUnitRow('sdCoopList', 'sd-coop-select'));
 
     // Events
     document.getElementById('addEventBtn').addEventListener('click', () => openEventModal());
@@ -569,6 +606,7 @@ function renderHeroDirectives(directives) {
         heroDirectivePage = Math.max(1, totalPages);
     }
 
+
     // Phân trang danh sách các ngày
     const startIndex = (heroDirectivePage - 1) * HERO_DIRECTIVES_PER_PAGE;
     const endIndex = Math.min(startIndex + HERO_DIRECTIVES_PER_PAGE, totalDates);
@@ -592,14 +630,21 @@ function renderHeroDirectives(directives) {
             const isStandalone = d.IsStandalone === 1 || d.MeetingID === null || d.MeetingID === undefined;
             const sourceLabel = isStandalone
                 ? '<span class="directive-tag" style="background:var(--accent-purple-light);color:var(--accent-purple);font-size:0.7rem;">Chỉ đạo ngoài họp</span>'
-                : '<span class="directive-tag" style="background:var(--accent-cyan-light);color:var(--accent-cyan);font-size:0.7rem;">Họp giao ban tuyên truyền hàng ngày</span>';
+                : '<span class="directive-tag" style="background:var(--accent-cyan-light);color:var(--accent-cyan);font-size:0.7rem;">Họp giao ban tuyên truyền hằng ngày</span>';
             const canEditStandalone = isStandalone && isVpdUser();
+
+            // Badge đơn vị phối hợp
+            let coopBadge = '';
+            if (d.CooperatingUnit && d.CooperatingUnit.trim()) {
+                coopBadge = `<span class="coop-unit-badge">🤝 Phối hợp: ${escapeHtml(d.CooperatingUnit)}</span>`;
+            }
 
             html += `
             <li class="directive-item" style="animation-delay: ${i * 0.05}s">
                 <div class="directive-bullet"></div>
                 <div class="directive-content">
                     ${d.AssignedTo ? `<span class="assigned">Giao ${escapeHtml(d.AssignedTo)}:</span>` : ''}
+                    ${coopBadge}
                     <span>${formatContent(d.Content)}</span>
                     <div class="directive-meta">
                         <span class="directive-tag" style="background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">${categoryLabel}</span>
@@ -622,6 +667,7 @@ function renderHeroDirectives(directives) {
     listContainer.innerHTML = html;
     renderDirectivePagination(totalPages, totalDates, directives.length);
 }
+
 
 // ===================== EVENTS =====================
 async function loadEvents() {
@@ -996,11 +1042,16 @@ function renderReportItem(r, meetingId, meetingStatus) {
 // BỎ hoàn toàn badge "Chưa thực hiện/Đã hoàn thành" và nút "✓ Hoàn thành"
 function renderDirectiveItem(d, meetingId) {
     const canManage = isVpdUser();
+    let coopBadge = '';
+    if (d.CooperatingUnit && d.CooperatingUnit.trim()) {
+        coopBadge = `<span class="coop-unit-badge" style="margin-bottom:4px;display:inline-flex;">🤝 Phối hợp: ${escapeHtml(d.CooperatingUnit)}</span>`;
+    }
 
     return `
     <div class="report-item">
         <div class="directive-content">
             ${d.AssignedTo ? `<span class="assigned">Giao ${escapeHtml(d.AssignedTo)}:</span>` : ''}
+            ${coopBadge}
             <span>${formatContent(d.Content)}</span>
             <div class="directive-meta" style="margin-top:6px">
                 ${d.Deadline ? `<span class="directive-tag" style="background:var(--accent-red-light);color:var(--accent-red);font-weight:600;">Hạn: ${formatDbDateVi(d.Deadline)}</span>` : ''}
@@ -1228,6 +1279,14 @@ function openDirectiveModal(meetingId, directive) {
         addAssignedUnitRow('dfAssignedList', 'df-assigned-select', assignedVal);
     }
 
+    // Gán đơn vị phối hợp
+    const coopContainer = document.getElementById('dfCoopList');
+    if (coopContainer) {
+        coopContainer.innerHTML = '';
+        const coopVal = directive ? (directive.CooperatingUnit || '') : '';
+        addCoopUnitRow('dfCoopList', 'df-coop-select', coopVal);
+    }
+
     document.getElementById('dfDeadline').value = directive ? (directive.Deadline || '') : '';
     document.getElementById('dfPriority').value = directive ? (directive.Priority || 0) : 0;
     document.getElementById('directiveModalTitle').textContent = directive ? 'Sửa chỉ đạo' : 'Thêm chỉ đạo / kết luận';
@@ -1266,6 +1325,13 @@ async function handleDirectiveSubmit() {
         }
     });
 
+    // Thu thập đơn vị phối hợp (chỉ lấy cái đầu tiên có giá trị)
+    const coopSelects = document.querySelectorAll('#dfCoopList .df-coop-select');
+    let cooperatingUnit = null;
+    coopSelects.forEach(s => {
+        if (s.value.trim() && !cooperatingUnit) cooperatingUnit = s.value.trim();
+    });
+
     // Nếu không chọn đơn vị nào, để null (Toàn Đài / Chung cho các Ban)
     if (assignedUnits.length === 0) {
         assignedUnits.push(null);
@@ -1278,6 +1344,7 @@ async function handleDirectiveSubmit() {
                 category,
                 content,
                 assignedTo: assignedUnits[0] || null,
+                cooperatingUnit,
                 deadline,
                 priority
             };
@@ -1297,6 +1364,7 @@ async function handleDirectiveSubmit() {
                     category,
                     content,
                     assignedTo: unit,
+                    cooperatingUnit,
                     deadline,
                     priority
                 };
@@ -1367,6 +1435,14 @@ function openStandaloneDirectiveModal(directive) {
         addAssignedUnitRow('sdAssignedList', 'sd-assigned-select', assignedVal);
     }
 
+    // Gán đơn vị phối hợp
+    const coopContainer = document.getElementById('sdCoopList');
+    if (coopContainer) {
+        coopContainer.innerHTML = '';
+        const coopVal = directive ? (directive.CooperatingUnit || '') : '';
+        addCoopUnitRow('sdCoopList', 'sd-coop-select', coopVal);
+    }
+
     document.getElementById('standaloneDirectiveModalTitle').textContent = directive ? 'Sửa chỉ đạo ngoài họp' : 'Thêm chỉ đạo ngoài họp';
     openModal('standaloneDirectiveModal');
 }
@@ -1408,6 +1484,13 @@ async function handleStandaloneDirectiveSubmit() {
         }
     });
 
+    // Thu thập đơn vị phối hợp
+    const sdCoopSelects = document.querySelectorAll('#sdCoopList .sd-coop-select');
+    let cooperatingUnit = null;
+    sdCoopSelects.forEach(s => {
+        if (s.value.trim() && !cooperatingUnit) cooperatingUnit = s.value.trim();
+    });
+
     if (assignedUnits.length === 0) {
         assignedUnits.push(null);
     }
@@ -1418,6 +1501,7 @@ async function handleStandaloneDirectiveSubmit() {
                 category,
                 content,
                 assignedTo: assignedUnits[0] || null,
+                cooperatingUnit,
                 directiveDate,
                 deadline,
                 priority
@@ -1437,6 +1521,7 @@ async function handleStandaloneDirectiveSubmit() {
                     category,
                     content,
                     assignedTo: unit,
+                    cooperatingUnit,
                     directiveDate,
                     deadline,
                     priority
@@ -2210,4 +2295,187 @@ function formatDbDateVi(str) {
     const dayName = dayNames[d.getDay()];
     
     return `${dayName}, ${dd}/${mm}/${yyyy}`;
+}
+
+// ===================== COMMENTS =====================
+
+async function loadComments() {
+    const container = document.getElementById('commentsList');
+    if (!container) return;
+    try {
+        const params = commentFilter ? `?filter=${commentFilter}` : '';
+        const resp = await fetch(`/api/comments${params}`);
+        const comments = await resp.json();
+        renderComments(comments);
+    } catch (e) {
+        console.error('Error loading comments:', e);
+    }
+}
+
+function setCommentFilter(filter) {
+    commentFilter = filter;
+    ['commentFilterAllBtn', 'commentFilterWeekBtn', 'commentFilterMonthBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.className = 'btn btn-sm btn-ghost';
+    });
+    const activeMap = { '': 'commentFilterAllBtn', 'week': 'commentFilterWeekBtn', 'month': 'commentFilterMonthBtn' };
+    const activeEl = document.getElementById(activeMap[filter]);
+    if (activeEl) activeEl.className = 'btn btn-sm btn-secondary active';
+    loadComments();
+}
+
+function truncateWords(text, limit = 50) {
+    if (!text) return '';
+    const words = text.split(/\s+/);
+    if (words.length <= limit) return text;
+    return words.slice(0, limit).join(' ') + '...';
+}
+
+function formatCommentDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${min}, ${dd}/${mm}/${yyyy}`;
+    } catch (e) { return dateStr; }
+}
+
+function renderComments(comments) {
+    const container = document.getElementById('commentsList');
+    if (!container) return;
+
+    if (!comments || comments.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p class="text-muted">Chưa có bình luận nào</p></div>';
+        return;
+    }
+
+    const currentUsername = currentUser ? (currentUser.username || '').toLowerCase() : '';
+    let html = '';
+    comments.forEach(c => {
+        const isPending = c.Status === 'pending';
+        const isAuthor = (c.AuthorUsername || '').toLowerCase() === currentUsername;
+        const canApprove = currentUser && canApproveCommentClient(c);
+        const words = (c.CommentText || '').split(/\s+/);
+        const isTruncated = words.length > 50;
+        const displayText = isTruncated ? truncateWords(c.CommentText) : c.CommentText;
+
+        html += `
+        <div class="comment-card ${isPending ? 'pending' : ''}" id="comment-${c.CommentID}">
+            <div class="comment-header">
+                <span class="comment-author">👤 ${escapeHtml(c.AuthorName || c.AuthorUsername)}</span>
+                ${c.Department ? `<span class="comment-dept">${escapeHtml(c.Department)}</span>` : ''}
+                <span class="comment-status-badge ${isPending ? 'pending' : 'approved'}">
+                    ${isPending ? '⏳ Chờ duyệt' : '✓ Đã duyệt'}
+                </span>
+                <span class="comment-time">${formatCommentDate(c.CreatedAt)}</span>
+            </div>
+            <div class="comment-body">
+                ${formatContent(displayText)}
+                ${isTruncated ? `<button class="btn btn-xs btn-ghost" onclick="expandComment(${c.CommentID}, ${JSON.stringify(escapeHtml(c.CommentText))})">▼ Xem đầy đủ</button>` : ''}
+            </div>
+            <div class="comment-actions">
+                ${canApprove && isPending ? `<button class="btn btn-xs btn-primary" onclick="approveComment(${c.CommentID})">✓ Duyệt</button>` : ''}
+                ${isAuthor || canApprove ? `<button class="btn btn-xs btn-secondary" onclick="deleteCommentAction(${c.CommentID})">✕ Xóa</button>` : ''}
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function canApproveCommentClient(comment) {
+    if (!currentUser) return false;
+    if (isAdminUser() || isBanTgdUser()) return true;
+    const vt = (currentUser.vai_tro || '').toLowerCase();
+    const dept = (currentUser.department || '').toLowerCase();
+    const isVpd = ['văn phòng đài','van phong dai','vpd','vpđ'].some(k => dept.includes(k));
+    if (vt === 'truong_ban' && isVpd) return true;
+    if (vt === 'truong_ban' && comment.Department) {
+        const cd = (comment.Department || '').toLowerCase();
+        return dept === cd || dept.includes(cd) || cd.includes(dept);
+    }
+    return false;
+}
+
+async function submitComment() {
+    if (!currentUser || !currentUser.logged_in) {
+        showToast('Vui lòng đăng nhập để bình luận', 'warning');
+        return;
+    }
+    const text = (document.getElementById('commentInput').value || '').trim();
+    if (!text) {
+        showToast('Vui lòng nhập nội dung bình luận', 'warning');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commentText: text })
+        });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        document.getElementById('commentInput').value = '';
+        loadComments();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+async function approveComment(commentId) {
+    try {
+        const resp = await fetch(`/api/comments/${commentId}/approve`, { method: 'PUT' });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        loadComments();
+        checkPendingComments();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+async function deleteCommentAction(commentId) {
+    if (!confirm('Bạn có chắc muốn xóa bình luận này?')) return;
+    try {
+        const resp = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (!resp.ok) { showToast(result.detail || 'Lỗi', 'error'); return; }
+        showToast(result.message, 'success');
+        loadComments();
+        checkPendingComments();
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    }
+}
+
+function expandComment(commentId, htmlText) {
+    document.getElementById('commentExpandTitle').textContent = 'Nội dung bình luận';
+    document.getElementById('commentExpandBody').innerHTML = `<p style="line-height:1.8;">${htmlText}</p>`;
+    openModal('commentExpandModal');
+}
+
+async function checkPendingComments() {
+    try {
+        const resp = await fetch('/api/comments/pending-count');
+        const data = await resp.json();
+        const badge = document.getElementById('pendingCommentBadge');
+        if (badge) {
+            if (data.count > 0) {
+                badge.textContent = `${data.count} chờ duyệt`;
+                badge.style.display = 'inline-flex';
+                badge.onclick = () => {
+                    document.getElementById('commentsSection').scrollIntoView({ behavior: 'smooth' });
+                };
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (e) {
+        // Ignore - user may not be logged in
+    }
 }

@@ -159,6 +159,7 @@ def init_db():
                 Category NVARCHAR(100) NOT NULL DEFAULT 'ket_luan',
                 Content NVARCHAR(MAX) NOT NULL,
                 AssignedTo NVARCHAR(255),
+                CooperatingUnit NVARCHAR(MAX),
                 Deadline NVARCHAR(50),
                 Status NVARCHAR(50) DEFAULT 'pending',
                 Priority INT DEFAULT 0,
@@ -167,6 +168,32 @@ def init_db():
                 CreatedAt DATETIME DEFAULT GETDATE(),
                 UpdatedAt DATETIME DEFAULT GETDATE(),
                 CONSTRAINT FK_Directives_Meetings FOREIGN KEY (MeetingID) REFERENCES Meetings(MeetingID) ON DELETE SET NULL
+            );
+        """)
+
+        # Thêm cột CooperatingUnit vào Directives nếu chưa có (migration)
+        cursor.execute("""
+            IF NOT EXISTS (
+                SELECT * FROM sys.columns
+                WHERE object_id = OBJECT_ID('Directives') AND name = 'CooperatingUnit'
+            )
+            ALTER TABLE Directives ADD CooperatingUnit NVARCHAR(MAX);
+        """)
+
+        # 7. Bảng DirectiveComments - Bình luận về chỉ đạo
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DirectiveComments')
+            CREATE TABLE DirectiveComments (
+                CommentID INT IDENTITY(1,1) PRIMARY KEY,
+                DirectiveID INT,
+                CommentText NVARCHAR(MAX) NOT NULL,
+                AuthorUsername NVARCHAR(255) NOT NULL,
+                AuthorName NVARCHAR(255),
+                Department NVARCHAR(255),
+                Status NVARCHAR(50) DEFAULT 'pending',
+                ApprovedBy NVARCHAR(255),
+                ApprovedAt DATETIME,
+                CreatedAt DATETIME DEFAULT GETDATE()
             );
         """)
 
@@ -672,6 +699,7 @@ def create_directive(
     category: str = "ket_luan",
     content: str = "",
     assigned_to: Optional[str] = None,
+    cooperating_unit: Optional[str] = None,
     deadline: Optional[str] = None,
     priority: int = 0,
     created_by: Optional[str] = None,
@@ -681,10 +709,10 @@ def create_directive(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO Directives (MeetingID, Category, Content, AssignedTo, Deadline, Priority, CreatedBy)
+            """INSERT INTO Directives (MeetingID, Category, Content, AssignedTo, CooperatingUnit, Deadline, Priority, CreatedBy)
                OUTPUT INSERTED.DirectiveID
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (meeting_id, category, content, assigned_to, deadline, priority, created_by),
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (meeting_id, category, content, assigned_to, cooperating_unit, deadline, priority, created_by),
         )
         directive_id = cursor.fetchone()[0]
         conn.commit()
@@ -697,6 +725,7 @@ def create_standalone_directive(
     category: str = "y_kien_tgd",
     content: str = "",
     assigned_to: Optional[str] = None,
+    cooperating_unit: Optional[str] = None,
     deadline: Optional[str] = None,
     priority: int = 0,
     directive_date: Optional[str] = None,
@@ -709,10 +738,10 @@ def create_standalone_directive(
         if not directive_date:
             directive_date = datetime.date.today().strftime("%Y-%m-%d")
         cursor.execute(
-            """INSERT INTO Directives (MeetingID, Category, Content, AssignedTo, Deadline, Priority, DirectiveDate, CreatedBy)
+            """INSERT INTO Directives (MeetingID, Category, Content, AssignedTo, CooperatingUnit, Deadline, Priority, DirectiveDate, CreatedBy)
                OUTPUT INSERTED.DirectiveID
-               VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)""",
-            (category, content, assigned_to, deadline, priority, directive_date, created_by),
+               VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (category, content, assigned_to, cooperating_unit, deadline, priority, directive_date, created_by),
         )
         directive_id = cursor.fetchone()[0]
         conn.commit()
@@ -770,7 +799,7 @@ def update_directive(directive_id: int, **kwargs) -> bool:
         cursor = conn.cursor()
         set_parts = []
         params = []
-        allowed_fields = ["Content", "AssignedTo", "Deadline", "Status", "Priority", "Category"]
+        allowed_fields = ["Content", "AssignedTo", "CooperatingUnit", "Deadline", "Status", "Priority", "Category"]
         for key, value in kwargs.items():
             if key in allowed_fields:
                 set_parts.append(f"{key} = ?")
@@ -834,7 +863,9 @@ def get_directives_filtered(
             query += " AND COALESCE(m.MeetingDate, d.DirectiveDate) <= ?"
             params.append(end_date)
         if department and department.strip():
-            query += " AND (d.AssignedTo LIKE ? OR d.AssignedTo = ?)"
+            query += " AND (d.AssignedTo LIKE ? OR d.AssignedTo = ? OR d.CooperatingUnit LIKE ? OR d.CooperatingUnit = ?)"
+            params.append(f"%{department.strip()}%")
+            params.append(department.strip())
             params.append(f"%{department.strip()}%")
             params.append(department.strip())
         if category and category.strip():
@@ -888,7 +919,7 @@ def update_standalone_directive(directive_id: int, **kwargs) -> bool:
         cursor = conn.cursor()
         set_parts = []
         params = []
-        allowed_fields = ["Content", "AssignedTo", "Deadline", "Status", "Priority", "Category", "DirectiveDate"]
+        allowed_fields = ["Content", "AssignedTo", "CooperatingUnit", "Deadline", "Status", "Priority", "Category", "DirectiveDate"]
         for key, value in kwargs.items():
             if key in allowed_fields:
                 set_parts.append(f"{key} = ?")
@@ -1134,6 +1165,111 @@ def delete_propaganda_plan(plan_id: int) -> bool:
         rows_affected = cursor.rowcount
         conn.commit()
         return rows_affected > 0
+    finally:
+        conn.close()
+
+
+# ===================== DIRECTIVE COMMENTS =====================
+
+def create_comment(
+    directive_id: Optional[int],
+    comment_text: str,
+    author_username: str,
+    author_name: Optional[str] = None,
+    department: Optional[str] = None,
+) -> int:
+    """Tạo bình luận mới (status = pending, chờ duyệt)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO DirectiveComments (DirectiveID, CommentText, AuthorUsername, AuthorName, Department, Status)
+               OUTPUT INSERTED.CommentID
+               VALUES (?, ?, ?, ?, ?, 'pending')""",
+            (directive_id, comment_text, author_username, author_name or author_username, department),
+        )
+        comment_id = cursor.fetchone()[0]
+        conn.commit()
+        return comment_id
+    finally:
+        conn.close()
+
+
+def get_comments(
+    directive_id: Optional[int] = None,
+    status: Optional[str] = None,
+    filter_period: Optional[str] = None,  # 'week', 'month', or None (all)
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Lấy danh sách bình luận."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = f"SELECT TOP ({int(limit)}) * FROM DirectiveComments WHERE 1=1"
+        params = []
+
+        if directive_id is not None:
+            query += " AND DirectiveID = ?"
+            params.append(directive_id)
+        if status:
+            query += " AND Status = ?"
+            params.append(status)
+        if filter_period == 'week':
+            query += " AND CreatedAt >= DATEADD(day, -7, GETDATE())"
+        elif filter_period == 'month':
+            query += " AND CreatedAt >= DATEADD(month, -1, GETDATE())"
+
+        query += " ORDER BY CreatedAt DESC"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return rows_to_dict_list(cursor, rows)
+    finally:
+        conn.close()
+
+
+def approve_comment(comment_id: int, approved_by: str) -> bool:
+    """Duyệt bình luận."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE DirectiveComments SET Status = 'approved', ApprovedBy = ?, ApprovedAt = GETDATE() WHERE CommentID = ?",
+            (approved_by, comment_id),
+        )
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
+    finally:
+        conn.close()
+
+
+def delete_comment(comment_id: int) -> bool:
+    """Xóa bình luận."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM DirectiveComments WHERE CommentID = ?", (comment_id,))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
+    finally:
+        conn.close()
+
+
+def get_pending_comment_count(department: Optional[str] = None) -> int:
+    """Đếm số bình luận pending. Nếu có department thì chỉ đếm của đơn vị đó."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if department and department.strip():
+            cursor.execute(
+                "SELECT COUNT(*) FROM DirectiveComments WHERE Status = 'pending' AND Department = ?",
+                (department.strip(),),
+            )
+        else:
+            cursor.execute("SELECT COUNT(*) FROM DirectiveComments WHERE Status = 'pending'")
+        count = cursor.fetchone()[0]
+        return count
     finally:
         conn.close()
 
