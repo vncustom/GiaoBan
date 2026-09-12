@@ -59,6 +59,7 @@ const DEPARTMENT_OPTIONS = [
     { value: 'Trung tâm Truyền dẫn Phát sóng', label: 'TT Truyền dẫn Phát sóng' },
     { value: 'Trung tâm Phát hình - Tư liệu', label: 'TT Phát hình - Tư liệu' },
     { value: 'Trung tâm Dịch vụ truyền thông', label: 'TT Dịch vụ truyền thông' },
+    { value: 'Công ty TMS', label: 'Công ty TMS' },
     { value: 'PTGĐ Thái Thành Chung', label: 'PTGĐ Thái Thành Chung' },
     { value: 'PTGĐ Diệp Bửu Chi', label: 'PTGĐ Diệp Bửu Chi' },
     { value: 'PTGĐ Trương Thanh Phong', label: 'PTGĐ Trương Thanh Phong' },
