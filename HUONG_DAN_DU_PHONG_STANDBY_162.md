@@ -47,10 +47,10 @@ Mở **SQL Server Management Studio (SSMS)** trên máy `10.1.1.162` bằng quy�
 -- 2. Tạo Login web_htv (nếu chưa có)
 USE [master];
 GO
-IF NOT EXISTS (SELECT name FROM sys.serverlogins WHERE name = 'web_htv')
+IF NOT EXISTS (SELECT name FROM sys.server_principals WHERE name = 'web_htv')
 BEGIN
-    CREATE LOGIN [web_htv] WITH PASSWORD = N'HtvWeb@2026!', 
-    CHECK_EXPIRATION = OFF, 
+    CREATE LOGIN [web_htv] WITH PASSWORD = N'HtvWeb@2026!',
+    CHECK_EXPIRATION = OFF,
     CHECK_POLICY = OFF;
 END
 GO
