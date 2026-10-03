@@ -411,7 +411,7 @@
             <div class="modal-body">
                 <form id="meetingForm">
                     <input type="hidden" id="meetingFormId">
-                    <div class="form-row">
+                    <div class="form-row-3">
                         <div class="form-group">
                             <label class="form-label">Ngày họp *</label>
                             <input type="date" class="form-input" id="mfDate" required>
@@ -419,6 +419,10 @@
                         <div class="form-group">
                             <label class="form-label">Giờ bắt đầu</label>
                             <input type="time" class="form-input" id="mfStartTime" value="08:00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Giờ kết thúc</label>
+                            <input type="time" class="form-input" id="mfEndTime" value="08:30">
                         </div>
                     </div>
                     <div class="form-row">
@@ -502,10 +506,15 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Loại báo cáo</label>
-                            <select class="form-select" id="rfCategory">
+                            <select class="form-select" id="rfCategory" onchange="toggleCategoryCustom(this, 'rfCategoryCustom')">
                                 <option value="noi_dung">Nội dung & Tuyên truyền</option>
                                 <option value="dieu_hanh">Điều hành chung</option>
+                                <option value="custom">Khác (Nhập đề mục bằng tay)...</option>
                             </select>
+                            <div id="rfCategoryCustomWrap" style="display: none; margin-top: 8px;">
+                                <label class="form-label" style="font-size: 0.8rem; color: var(--accent-blue); margin-bottom: 4px;">✍️ Tên đề mục báo cáo mới *</label>
+                                <input type="text" class="form-input" id="rfCategoryCustom" placeholder="Nhập tên đề mục báo cáo (VD: Công tác Đảng, Chuyển đổi số...)">
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -535,10 +544,15 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Phân loại</label>
-                            <select class="form-select" id="dfCategory">
+                            <select class="form-select" id="dfCategory" onchange="toggleCategoryCustom(this, 'dfCategoryCustom')">
                                 <option value="ket_luan">Kết luận cuộc họp</option>
                                 <option value="y_kien_tgd">Ý kiến Ban TGĐ</option>
+                                <option value="custom">Khác (Nhập đề mục bằng tay)...</option>
                             </select>
+                            <div id="dfCategoryCustomWrap" style="display: none; margin-top: 8px;">
+                                <label class="form-label" style="font-size: 0.8rem; color: var(--accent-blue); margin-bottom: 4px;">✍️ Tên đề mục chỉ đạo / kết luận mới *</label>
+                                <input type="text" class="form-input" id="dfCategoryCustom" placeholder="Nhập tên đề mục (VD: Ý kiến Phó Tổng Giám đốc, Kết luận chuyên đề...)">
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -835,10 +849,15 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Phân loại</label>
-                            <select class="form-select" id="sdCategory">
+                            <select class="form-select" id="sdCategory" onchange="toggleCategoryCustom(this, 'sdCategoryCustom')">
                                 <option value="y_kien_tgd">Ý kiến Ban TGĐ</option>
                                 <option value="ket_luan">Kết luận</option>
+                                <option value="custom">Khác (Nhập đề mục bằng tay)...</option>
                             </select>
+                            <div id="sdCategoryCustomWrap" style="display: none; margin-top: 8px;">
+                                <label class="form-label" style="font-size: 0.8rem; color: var(--accent-blue); margin-bottom: 4px;">✍️ Tên đề mục chỉ đạo mới *</label>
+                                <input type="text" class="form-input" id="sdCategoryCustom" placeholder="Nhập tên đề mục chỉ đạo...">
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -1145,6 +1164,27 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=9"></script>
+    <script>
+        function toggleCategoryCustom(selectEl, customInputId) {
+            var wrapEl = document.getElementById(customInputId + 'Wrap');
+            var inputEl = document.getElementById(customInputId);
+            if (!selectEl) return;
+            if (selectEl.value === 'custom') {
+                if (wrapEl) wrapEl.style.display = 'block';
+                if (inputEl) {
+                    inputEl.style.display = 'block';
+                    setTimeout(function() { inputEl.focus(); }, 60);
+                }
+            } else {
+                if (wrapEl) wrapEl.style.display = 'none';
+                if (inputEl) {
+                    inputEl.style.display = 'none';
+                    inputEl.value = '';
+                }
+            }
+        }
+        window.toggleCategoryCustom = toggleCategoryCustom;
+    </script>
+    <script src="/static/js/app.js?v=11"></script>
 </body>
 </html>

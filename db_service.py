@@ -496,7 +496,7 @@ def get_new_user_count() -> int:
 def create_meeting(
     meeting_date: str,
     start_time: str = "08:00",
-    end_time: Optional[str] = None,
+    end_time: Optional[str] = "08:30",
     location: str = "Phòng họp Giao ban Đài Phát thanh và Truyền hình Thành phố",
     chairman: Optional[str] = None,
     chairman_title: Optional[str] = None,
@@ -664,13 +664,25 @@ def get_reports(meeting_id: int, category: Optional[str] = None) -> List[Dict[st
         conn.close()
 
 
-def update_report(report_id: int, content: str, created_by: Optional[str] = None) -> bool:
+def update_report(
+    report_id: int,
+    content: str,
+    department: Optional[str] = None,
+    category: Optional[str] = None,
+    created_by: Optional[str] = None,
+) -> bool:
     """Cập nhật nội dung báo cáo."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         query = "UPDATE MeetingReports SET Content = ?, UpdatedAt = GETDATE()"
         params = [content]
+        if department:
+            query += ", Department = ?"
+            params.append(department)
+        if category:
+            query += ", Category = ?"
+            params.append(category)
         if created_by:
             query += ", CreatedBy = ?"
             params.append(created_by)

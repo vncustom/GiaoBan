@@ -250,7 +250,7 @@ class UserUpdateRequest(BaseModel):
 class MeetingCreateRequest(BaseModel):
     meeting_date: str = Field(..., alias="meetingDate")
     start_time: str = Field("08:00", alias="startTime")
-    end_time: Optional[str] = Field(None, alias="endTime")
+    end_time: Optional[str] = Field("08:30", alias="endTime")
     location: str = Field("Phòng họp Giao ban Đài Phát thanh và Truyền hình Thành phố", alias="location")
     chairman: Optional[str] = None
     chairman_title: Optional[str] = Field(None, alias="chairmanTitle")
@@ -630,7 +630,13 @@ def api_update_report(meeting_id: int, report_id: int, req: ReportCreateRequest,
     if meeting and meeting.get("Status") == "Published" and not is_vpd_user(user) and not is_admin_user(user):
         raise HTTPException(status_code=403, detail="Cuộc họp đã được công bố, không thể sửa báo cáo.")
 
-    success = db_service.update_report(report_id, req.content, created_by=user.get("username"))
+    success = db_service.update_report(
+        report_id,
+        req.content,
+        department=req.department,
+        category=req.category,
+        created_by=user.get("username"),
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Không thể cập nhật báo cáo.")
     return {"success": True, "message": "Cập nhật báo cáo thành công!"}

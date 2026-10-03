@@ -326,6 +326,36 @@ function bindEvents() {
     const sdAddCoopBtn = document.getElementById('sdAddCoopBtn');
     if (sdAddCoopBtn) sdAddCoopBtn.addEventListener('click', () => addCoopUnitRow('sdCoopList', 'sd-coop-select'));
 
+    // Category custom toggle listeners
+    function toggleCategoryCustom(selectEl, customInputId) {
+        const wrap = document.getElementById(customInputId + 'Wrap');
+        const input = document.getElementById(customInputId);
+        if (!selectEl) return;
+        if (selectEl.value === 'custom') {
+            if (wrap) wrap.style.display = 'block';
+            if (input) {
+                input.style.display = 'block';
+                setTimeout(() => input.focus(), 60);
+            }
+        } else {
+            if (wrap) wrap.style.display = 'none';
+            if (input) {
+                input.style.display = 'none';
+                input.value = '';
+            }
+        }
+    }
+    window.toggleCategoryCustom = toggleCategoryCustom;
+
+    const rfCat = document.getElementById('rfCategory');
+    if (rfCat) rfCat.addEventListener('change', () => toggleCategoryCustom(rfCat, 'rfCategoryCustom'));
+
+    const dfCat = document.getElementById('dfCategory');
+    if (dfCat) dfCat.addEventListener('change', () => toggleCategoryCustom(dfCat, 'dfCategoryCustom'));
+
+    const sdCat = document.getElementById('sdCategory');
+    if (sdCat) sdCat.addEventListener('change', () => toggleCategoryCustom(sdCat, 'sdCategoryCustom'));
+
     // Events
     document.getElementById('addEventBtn').addEventListener('click', () => openEventModal());
     document.getElementById('eventFormSubmit').addEventListener('click', handleEventSubmit);
@@ -732,7 +762,9 @@ function renderHeroDirectives(directives) {
             <ul class="directive-list">`;
 
         items.forEach((d, i) => {
-            const categoryLabel = d.Category === 'y_kien_tgd' ? 'Ý kiến Ban TGĐ' : 'Kết luận cuộc họp';
+            const categoryLabel = d.Category === 'y_kien_tgd' 
+                ? 'Ý kiến Ban TGĐ' 
+                : (d.Category === 'ket_luan' ? 'Kết luận cuộc họp' : (d.Category || 'Kết luận cuộc họp'));
             const isStandalone = d.IsStandalone === 1 || d.MeetingID === null || d.MeetingID === undefined;
             const sourceLabel = isStandalone
                 ? '<span class="directive-tag" style="background:var(--accent-purple-light);color:var(--accent-purple);font-size:0.7rem;">Chỉ đạo ngoài họp</span>'
@@ -1048,6 +1080,23 @@ function renderMeetingDetail(meeting, reports, directives) {
         reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
     }
 
+    // Các đề mục báo cáo khác (tùy chỉnh)
+    const customReportCategories = [];
+    reports.forEach(r => {
+        const cat = (r.Category || '').trim();
+        if (cat && cat !== 'noi_dung' && cat !== 'dieu_hanh' && !customReportCategories.includes(cat)) {
+            customReportCategories.push(cat);
+        }
+    });
+
+    customReportCategories.forEach((catName, idx) => {
+        const catReports = reports.filter(r => (r.Category || '').trim() === catName);
+        reportsHtml += `<div class="content-section-title mt-4"><span class="num">II.${idx + 3}</span> ${escapeHtml(catName)}</div>`;
+        catReports.forEach(r => {
+            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
+        });
+    });
+
     // III. Ý kiến Ban TGĐ
     const yKienTgd = directives.filter(d => d.Category === 'y_kien_tgd');
     let yKienHtml = `<div class="content-section-title mt-4"><span class="num">III</span> Ý kiến của Ban Tổng Giám đốc</div>`;
@@ -1069,6 +1118,29 @@ function renderMeetingDetail(meeting, reports, directives) {
     } else {
         ketLuanHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có kết luận nào</p>`;
     }
+
+    // Các đề mục chỉ đạo / kết luận khác (tùy chỉnh)
+    const romanNumerals = ['V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
+    const customDirectiveCategories = [];
+    directives.forEach(d => {
+        const cat = (d.Category || '').trim();
+        if (cat && cat !== 'y_kien_tgd' && cat !== 'ket_luan' && !customDirectiveCategories.includes(cat)) {
+            customDirectiveCategories.push(cat);
+        }
+    });
+
+    let customDirectivesHtml = '';
+    customDirectiveCategories.forEach((catName, idx) => {
+        const romanNum = romanNumerals[idx] || `${idx + 5}`;
+        const catDirectives = directives.filter(d => (d.Category || '').trim() === catName);
+        customDirectivesHtml += `
+        <div class="meeting-content-section">
+            <div class="content-section-title mt-4"><span class="num">${romanNum}</span> ${escapeHtml(catName)}</div>`;
+        catDirectives.forEach(d => {
+            customDirectivesHtml += renderDirectiveItem(d, m.MeetingID);
+        });
+        customDirectivesHtml += `</div>`;
+    });
 
     // Action buttons
     let actionsHtml = '';
@@ -1115,6 +1187,7 @@ function renderMeetingDetail(meeting, reports, directives) {
         <div class="meeting-content-section">
             ${ketLuanHtml}
         </div>
+        ${customDirectivesHtml}
         ${actionsHtml}
     `;
 }
@@ -1172,6 +1245,7 @@ async function openMeetingModal(meetingId) {
     document.getElementById('meetingFormId').value = '';
     document.getElementById('mfDate').value = '';
     document.getElementById('mfStartTime').value = '08:00';
+    document.getElementById('mfEndTime').value = '08:30';
     document.getElementById('mfChairman').value = '';
     document.getElementById('mfChairmanTitle').value = '';
     document.getElementById('mfSecretary').value = '';
@@ -1187,6 +1261,7 @@ async function openMeetingModal(meetingId) {
             document.getElementById('meetingFormId').value = m.MeetingID;
             document.getElementById('mfDate').value = m.MeetingDate || '';
             document.getElementById('mfStartTime').value = m.StartTime || '08:00';
+            document.getElementById('mfEndTime').value = m.EndTime || '08:30';
             document.getElementById('mfChairman').value = m.Chairman || '';
             document.getElementById('mfChairmanTitle').value = m.ChairmanTitle || '';
             document.getElementById('mfSecretary').value = m.Secretary || '';
@@ -1197,6 +1272,8 @@ async function openMeetingModal(meetingId) {
     } else {
         document.getElementById('meetingModalTitle').textContent = 'Tạo cuộc họp mới';
         document.getElementById('mfDate').value = toDbDate(new Date());
+        document.getElementById('mfStartTime').value = '08:00';
+        document.getElementById('mfEndTime').value = '08:30';
     }
 
     openModal('meetingModal');
@@ -1207,6 +1284,7 @@ async function handleMeetingSubmit() {
     const data = {
         meetingDate: document.getElementById('mfDate').value,
         startTime: document.getElementById('mfStartTime').value,
+        endTime: document.getElementById('mfEndTime').value,
         location: document.getElementById('mfLocation').value,
         chairman: document.getElementById('mfChairman').value.trim(),
         chairmanTitle: document.getElementById('mfChairmanTitle').value.trim(),
@@ -1289,7 +1367,28 @@ function openReportModal(meetingId, report) {
     document.getElementById('rfMeetingId').value = meetingId;
     document.getElementById('rfReportId').value = report ? report.ReportID : '';
     document.getElementById('rfDepartment').value = report ? report.Department : (currentUser ? (currentUser.department || '') : '');
-    document.getElementById('rfCategory').value = report ? report.Category : 'noi_dung';
+
+    const catSelect = document.getElementById('rfCategory');
+    const customWrap = document.getElementById('rfCategoryCustomWrap');
+    const customInput = document.getElementById('rfCategoryCustom');
+    const currentCat = report ? report.Category : 'noi_dung';
+
+    if (currentCat === 'noi_dung' || currentCat === 'dieu_hanh') {
+        catSelect.value = currentCat;
+        if (customWrap) customWrap.style.display = 'none';
+        if (customInput) {
+            customInput.value = '';
+            customInput.style.display = 'none';
+        }
+    } else {
+        catSelect.value = 'custom';
+        if (customWrap) customWrap.style.display = 'block';
+        if (customInput) {
+            customInput.value = currentCat || '';
+            customInput.style.display = 'block';
+        }
+    }
+
     document.getElementById('rfContent').value = report ? report.Content : '';
     document.getElementById('reportModalTitle').textContent = report ? 'Sửa báo cáo' : 'Thêm báo cáo';
     openModal('reportModal');
@@ -1307,9 +1406,21 @@ async function editReport(meetingId, reportId) {
 async function handleReportSubmit() {
     const meetingId = document.getElementById('rfMeetingId').value;
     const reportId = document.getElementById('rfReportId').value;
+
+    const catSelect = document.getElementById('rfCategory');
+    let category = catSelect.value;
+    if (category === 'custom') {
+        category = document.getElementById('rfCategoryCustom').value.trim();
+        if (!category) {
+            showToast('Vui lòng nhập tên đề mục báo cáo', 'warning');
+            document.getElementById('rfCategoryCustom').focus();
+            return;
+        }
+    }
+
     const data = {
         department: document.getElementById('rfDepartment').value,
-        category: document.getElementById('rfCategory').value,
+        category: category,
         content: document.getElementById('rfContent').value.trim()
     };
 
@@ -1369,7 +1480,28 @@ function openDirectiveModal(meetingId, directive) {
     const mId = meetingId || (directive ? directive.MeetingID : '');
     document.getElementById('dfMeetingId').value = mId;
     document.getElementById('dfDirectiveId').value = directive ? directive.DirectiveID : '';
-    document.getElementById('dfCategory').value = directive ? directive.Category : 'ket_luan';
+
+    const catSelect = document.getElementById('dfCategory');
+    const customWrap = document.getElementById('dfCategoryCustomWrap');
+    const customInput = document.getElementById('dfCategoryCustom');
+    const currentCat = directive ? directive.Category : 'ket_luan';
+
+    if (currentCat === 'ket_luan' || currentCat === 'y_kien_tgd') {
+        catSelect.value = currentCat;
+        if (customWrap) customWrap.style.display = 'none';
+        if (customInput) {
+            customInput.value = '';
+            customInput.style.display = 'none';
+        }
+    } else {
+        catSelect.value = 'custom';
+        if (customWrap) customWrap.style.display = 'block';
+        if (customInput) {
+            customInput.value = currentCat || '';
+            customInput.style.display = 'block';
+        }
+    }
+
     document.getElementById('dfContent').value = directive ? directive.Content : '';
     
     // Gán danh sách đơn vị được giao (hỗ trợ nhiều đơn vị cách nhau bởi dấu phẩy)
@@ -1424,7 +1556,18 @@ async function editDirective(meetingId, directiveId) {
 async function handleDirectiveSubmit() {
     const meetingId = document.getElementById('dfMeetingId').value;
     const directiveId = document.getElementById('dfDirectiveId').value;
-    const category = document.getElementById('dfCategory').value;
+
+    const catSelect = document.getElementById('dfCategory');
+    let category = catSelect.value;
+    if (category === 'custom') {
+        category = document.getElementById('dfCategoryCustom').value.trim();
+        if (!category) {
+            showToast('Vui lòng nhập tên đề mục chỉ đạo / kết luận', 'warning');
+            document.getElementById('dfCategoryCustom').focus();
+            return;
+        }
+    }
+
     const content = document.getElementById('dfContent').value.trim();
     const deadline = document.getElementById('dfDeadline').value || null;
     const priority = parseInt(document.getElementById('dfPriority').value) || 0;
@@ -1519,7 +1662,28 @@ async function deleteDirective(meetingId, directiveId) {
 // ===================== STANDALONE DIRECTIVE CRUD =====================
 function openStandaloneDirectiveModal(directive) {
     document.getElementById('sdDirectiveId').value = directive ? directive.DirectiveID : '';
-    document.getElementById('sdCategory').value = directive ? directive.Category : 'y_kien_tgd';
+
+    const catSelect = document.getElementById('sdCategory');
+    const customWrap = document.getElementById('sdCategoryCustomWrap');
+    const customInput = document.getElementById('sdCategoryCustom');
+    const currentCat = directive ? directive.Category : 'y_kien_tgd';
+
+    if (currentCat === 'y_kien_tgd' || currentCat === 'ket_luan') {
+        catSelect.value = currentCat;
+        if (customWrap) customWrap.style.display = 'none';
+        if (customInput) {
+            customInput.value = '';
+            customInput.style.display = 'none';
+        }
+    } else {
+        catSelect.value = 'custom';
+        if (customWrap) customWrap.style.display = 'block';
+        if (customInput) {
+            customInput.value = currentCat || '';
+            customInput.style.display = 'block';
+        }
+    }
+
     document.getElementById('sdContent').value = directive ? directive.Content : '';
     document.getElementById('sdDirectiveDate').value = directive ? (directive.DirectiveDate || toDbDate(new Date())) : toDbDate(new Date());
     document.getElementById('sdDeadline').value = directive ? (directive.Deadline || '') : '';
@@ -1575,7 +1739,18 @@ async function editStandaloneDirective(directiveId) {
 
 async function handleStandaloneDirectiveSubmit() {
     const directiveId = document.getElementById('sdDirectiveId').value;
-    const category = document.getElementById('sdCategory').value;
+
+    const catSelect = document.getElementById('sdCategory');
+    let category = catSelect.value;
+    if (category === 'custom') {
+        category = document.getElementById('sdCategoryCustom').value.trim();
+        if (!category) {
+            showToast('Vui lòng nhập tên đề mục chỉ đạo', 'warning');
+            document.getElementById('sdCategoryCustom').focus();
+            return;
+        }
+    }
+
     const content = document.getElementById('sdContent').value.trim();
     const directiveDate = document.getElementById('sdDirectiveDate').value;
     const deadline = document.getElementById('sdDeadline').value || null;
