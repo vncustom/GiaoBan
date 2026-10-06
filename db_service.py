@@ -251,6 +251,25 @@ def init_db():
             );
         """)
 
+        # 9. Bảng SharedDocuments - Văn bản chia sẻ giữa các Ban/Trung tâm
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SharedDocuments')
+            CREATE TABLE SharedDocuments (
+                DocID INT IDENTITY(1,1) PRIMARY KEY,
+                Title NVARCHAR(500) NOT NULL,
+                Content NVARCHAR(MAX),
+                DocType NVARCHAR(100) NOT NULL DEFAULT N'Khác',
+                Department NVARCHAR(255),
+                CreatedBy NVARCHAR(255),
+                CreatedByName NVARCHAR(255),
+                AttachmentPath NVARCHAR(500),
+                AttachmentName NVARCHAR(500),
+                AttachmentSize INT,
+                CreatedAt DATETIME DEFAULT GETDATE(),
+                UpdatedAt DATETIME DEFAULT GETDATE()
+            );
+        """)
+
         # Đảm bảo tài khoản Admin local luôn sẵn sàng
         cursor.execute("SELECT UserID FROM Users WHERE LOWER(Username) = 'admin'")
         admin_row = cursor.fetchone()
@@ -1463,3 +1482,167 @@ def delete_banner(banner_id: int) -> bool:
 
 # Khởi tạo bảng ngay khi import module
 init_db()
+
+
+# ===================== SHARED DOCUMENTS (Văn bản chia sẻ) =====================
+
+def create_shared_document(
+    title: str,
+    content: str,
+    doc_type: str,
+    department: Optional[str],
+    created_by: Optional[str],
+    created_by_name: Optional[str] = None,
+    attachment_path: Optional[str] = None,
+    attachment_name: Optional[str] = None,
+    attachment_size: Optional[int] = None,
+) -> int:
+    """Tạo văn bản chia sẻ mới."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO SharedDocuments
+               (Title, Content, DocType, Department, CreatedBy, CreatedByName,
+                AttachmentPath, AttachmentName, AttachmentSize)
+               OUTPUT INSERTED.DocID
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (title, content, doc_type, department, created_by, created_by_name,
+             attachment_path, attachment_name, attachment_size),
+        )
+        doc_id = cursor.fetchone()[0]
+        conn.commit()
+        return doc_id
+    finally:
+        conn.close()
+
+
+def get_shared_documents(
+    doc_type: Optional[str] = None,
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    month: Optional[str] = None,
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Lấy danh sách văn bản chia sẻ có hỗ trợ lọc theo hình thức, ban, ngày, tháng."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = (
+            f"SELECT TOP ({int(limit)}) * FROM SharedDocuments WHERE 1=1"
+        )
+        params: List[Any] = []
+
+        if doc_type and doc_type.strip():
+            query += " AND DocType = ?"
+            params.append(doc_type.strip())
+        if department and department.strip():
+            query += " AND (Department = ? OR Department LIKE ?)"
+            params.extend([department.strip(), f"%{department.strip()}%"])
+        if search and search.strip():
+            query += " AND (Title LIKE ? OR Content LIKE ?)"
+            params.extend([f"%{search.strip()}%", f"%{search.strip()}%"])
+        if month and month.strip():
+            query += " AND CONVERT(VARCHAR(7), CreatedAt, 120) = ?"
+            params.append(month.strip())
+        elif date and date.strip():
+            query += " AND CONVERT(VARCHAR(10), CreatedAt, 120) = ?"
+            params.append(date.strip())
+        elif start_date or end_date:
+            if start_date:
+                query += " AND CONVERT(VARCHAR(10), CreatedAt, 120) >= ?"
+                params.append(start_date.strip())
+            if end_date:
+                query += " AND CONVERT(VARCHAR(10), CreatedAt, 120) <= ?"
+                params.append(end_date.strip())
+
+        query += " ORDER BY CreatedAt DESC"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return rows_to_dict_list(cursor, rows)
+    finally:
+        conn.close()
+
+
+def get_shared_document(doc_id: int) -> Optional[Dict[str, Any]]:
+    """Lấy chi tiết 1 văn bản chia sẻ."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM SharedDocuments WHERE DocID = ?", (doc_id,))
+        row = cursor.fetchone()
+        return row_to_dict(cursor, row)
+    finally:
+        conn.close()
+
+
+def update_shared_document(
+    doc_id: int,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    attachment_path: Optional[str] = None,
+    attachment_name: Optional[str] = None,
+    attachment_size: Optional[int] = None,
+) -> bool:
+    """Cập nhật văn bản chia sẻ."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        fields: List[str] = []
+        params: List[Any] = []
+
+        if title is not None:
+            fields.append("Title = ?")
+            params.append(title)
+        if content is not None:
+            fields.append("Content = ?")
+            params.append(content)
+        if doc_type is not None:
+            fields.append("DocType = ?")
+            params.append(doc_type)
+        if attachment_path is not None:
+            fields.append("AttachmentPath = ?")
+            params.append(attachment_path)
+        if attachment_name is not None:
+            fields.append("AttachmentName = ?")
+            params.append(attachment_name)
+        if attachment_size is not None:
+            fields.append("AttachmentSize = ?")
+            params.append(attachment_size)
+
+        if not fields:
+            return False
+
+        fields.append("UpdatedAt = GETDATE()")
+        params.append(doc_id)
+        sql = f"UPDATE SharedDocuments SET {', '.join(fields)} WHERE DocID = ?"
+        cursor.execute(sql, tuple(params))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        return rows_affected > 0
+    finally:
+        conn.close()
+
+
+def delete_shared_document(doc_id: int) -> Optional[str]:
+    """Xóa văn bản chia sẻ, trả về đường dẫn file đính kèm để xóa vật lý."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT AttachmentPath FROM SharedDocuments WHERE DocID = ?", (doc_id,))
+        row = cursor.fetchone()
+        attachment_path = row[0] if row else None
+
+        cursor.execute("DELETE FROM SharedDocuments WHERE DocID = ?", (doc_id,))
+        rows_affected = cursor.rowcount
+        conn.commit()
+        if rows_affected > 0:
+            return attachment_path
+        return None
+    finally:
+        conn.close()

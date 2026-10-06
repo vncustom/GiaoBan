@@ -8,9 +8,11 @@ Dùng SSO + Local Auth.
 import os
 import time
 import io
+import uuid
+import shutil
 import datetime
-from fastapi import FastAPI, Request, HTTPException, Header
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi import FastAPI, Request, HTTPException, Header, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -1574,3 +1576,151 @@ def api_delete_banner(banner_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Không tìm thấy banner cần xóa.")
 
     return {"success": True, "message": "Xóa banner thành công!"}
+
+
+# ===================== SHARED DOCUMENTS (Văn bản chia sẻ) =====================
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "van_ban")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".jpg", ".jpeg", ".png"}
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+
+DOC_TYPES = ["Báo cáo", "Biên bản", "Hướng dẫn", "Kế hoạch", "Thông báo", "Tờ trình", "Công văn", "Khác"]
+
+
+# Mount thư mục uploads vào static
+app.mount("/uploads", StaticFiles(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")), name="uploads")
+
+
+@app.get("/api/shared-docs")
+def api_get_shared_docs(
+    request: Request,
+    doc_type: Optional[str] = None,
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    month: Optional[str] = None,
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+):
+    """Lấy danh sách văn bản chia sẻ. Hỗ trợ lọc theo hình thức, đơn vị, tháng, ngày."""
+    docs = db_service.get_shared_documents(
+        doc_type=doc_type or None,
+        department=department or None,
+        search=search or None,
+        month=month or None,
+        date=date or None,
+        start_date=start_date or None,
+        end_date=end_date or None,
+        limit=min(limit, 300),
+    )
+    return docs
+
+
+@app.get("/api/shared-docs/{doc_id}")
+def api_get_shared_doc(doc_id: int, request: Request):
+    """Lấy chi tiết 1 văn bản chia sẻ."""
+    doc = db_service.get_shared_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy văn bản.")
+    return doc
+
+
+@app.post("/api/shared-docs")
+async def api_create_shared_doc(
+    request: Request,
+    title: str = Form(...),
+    content: str = Form(""),
+    doc_type: str = Form("Khác"),
+    department: Optional[str] = Form(None),
+    attachment: Optional[UploadFile] = File(None),
+):
+    """Tạo văn bản chia sẻ mới. Yêu cầu đăng nhập."""
+    user = get_current_user(request)
+    if not user or not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    if doc_type not in DOC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Hình thức không hợp lệ. Chọn một trong: {', '.join(DOC_TYPES)}")
+
+    # Xử lý đơn vị ban hành
+    doc_dept = (department or "").strip()
+    if not doc_dept:
+        doc_dept = user.get("department") or ""
+
+    # Xử lý file đính kèm
+    attachment_path = None
+    attachment_name = None
+    attachment_size = None
+
+    if attachment and attachment.filename:
+        ext = os.path.splitext(attachment.filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Chỉ cho phép đính kèm các định dạng: PDF, DOCX, JPG, PNG."
+            )
+
+        # Đọc nội dung để kiểm tra kích thước
+        file_content = await attachment.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File vượt quá giới hạn 25MB.")
+
+        # Lưu file với tên duy nhất
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        file_path = os.path.join(UPLOAD_DIR, safe_name)
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+
+        attachment_path = f"van_ban/{safe_name}"
+        attachment_name = attachment.filename
+        attachment_size = len(file_content)
+
+    doc_id = db_service.create_shared_document(
+        title=title.strip(),
+        content=content.strip(),
+        doc_type=doc_type,
+        department=doc_dept,
+        created_by=user.get("username") or "",
+        created_by_name=user.get("full_name") or user.get("username") or "",
+        attachment_path=attachment_path,
+        attachment_name=attachment_name,
+        attachment_size=attachment_size,
+    )
+    return {"success": True, "doc_id": doc_id, "message": "Tải lên văn bản thành công!"}
+
+
+@app.delete("/api/shared-docs/{doc_id}")
+def api_delete_shared_doc(doc_id: int, request: Request):
+    """Xóa văn bản chia sẻ.
+    - Admin: xóa bất kỳ
+    - Tác giả: chỉ xóa bài của mình
+    """
+    user = get_current_user(request)
+    if not user or not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+
+    doc = db_service.get_shared_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy văn bản.")
+
+    is_admin = is_admin_user(user)
+    is_author = (doc.get("CreatedBy") or "").strip().lower() == (user.get("username") or "").strip().lower()
+
+    if not is_admin and not is_author:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xóa văn bản này.")
+
+    attachment_path = db_service.delete_shared_document(doc_id)
+
+    # Xóa file vật lý nếu có
+    if attachment_path:
+        full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", attachment_path)
+        try:
+            if os.path.exists(full_path):
+                os.remove(full_path)
+        except Exception as e:
+            print(f"[WARN] Could not delete file {full_path}: {e}")
+
+    return {"success": True, "message": "Xóa văn bản thành công!"}

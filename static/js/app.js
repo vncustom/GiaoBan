@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadEvents();
     loadMeetings();
     bindEvents();
+    initSharedDocs();
 });
 
 // ===================== THEME TOGGLE (LIGHT / DARK) =====================
@@ -218,6 +219,11 @@ function showLoggedIn(user) {
     const bannerListCreateBtn = document.getElementById('bannerListCreateBtn');
     if (bannerListCreateBtn) bannerListCreateBtn.style.display = canManageBanner ? '' : 'none';
 
+    // Nút đăng văn bản chia sẻ (tất cả user đăng nhập đều được đăng)
+    if (typeof updateSDUploadBtnVisibility === 'function') {
+        updateSDUploadBtnVisibility();
+    }
+
     // Tải lại biên bản để hiện các nút chức năng phù hợp
     loadMeetings();
 }
@@ -238,6 +244,10 @@ function showLoggedOut() {
     if (bannerCreateBtn) bannerCreateBtn.style.display = 'none';
     const bannerListCreateBtn = document.getElementById('bannerListCreateBtn');
     if (bannerListCreateBtn) bannerListCreateBtn.style.display = 'none';
+
+    if (typeof updateSDUploadBtnVisibility === 'function') {
+        updateSDUploadBtnVisibility();
+    }
 }
 
 function isAdminUser() {
@@ -3228,3 +3238,610 @@ async function deleteBannerAction(bannerId, isPublished) {
     }
 }
 
+
+
+// =====================================================================
+// MAIN VIEW SWITCHER (Giao ban điều hành vs Văn bản chia sẻ)
+// =====================================================================
+
+function switchMainView(viewName) {
+    const viewGiaoBan = document.getElementById('viewGiaoBan');
+    const viewSharedDocs = document.getElementById('viewSharedDocs');
+    const tabGiaoBanBtn = document.getElementById('tabGiaoBanBtn');
+    const tabSharedDocsBtn = document.getElementById('tabSharedDocsBtn');
+
+    if (viewName === 'shared-docs') {
+        if (viewGiaoBan) viewGiaoBan.style.display = 'none';
+        if (viewSharedDocs) viewSharedDocs.style.display = 'block';
+        if (tabGiaoBanBtn) tabGiaoBanBtn.classList.remove('active');
+        if (tabSharedDocsBtn) tabSharedDocsBtn.classList.add('active');
+        if (window.location.hash !== '#van-ban-chia-se') {
+            try { history.pushState(null, '', '#van-ban-chia-se'); } catch (e) { window.location.hash = '#van-ban-chia-se'; }
+        }
+        loadSharedDocs();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+        if (viewGiaoBan) viewGiaoBan.style.display = 'block';
+        if (viewSharedDocs) viewSharedDocs.style.display = 'none';
+        if (tabGiaoBanBtn) tabGiaoBanBtn.classList.add('active');
+        if (tabSharedDocsBtn) tabSharedDocsBtn.classList.remove('active');
+        if (window.location.hash && window.location.hash !== '#giaoban') {
+            try { history.pushState(null, '', '#giaoban'); } catch (e) { window.location.hash = '#giaoban'; }
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function initRouting() {
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash;
+        if (hash === '#van-ban-chia-se' || hash === '#shared-docs' || hash === '#sharedDocsSection') {
+            switchMainView('shared-docs');
+        } else if (hash === '#giaoban' || hash === '') {
+            switchMainView('giaoban');
+        }
+    });
+
+    const initHash = window.location.hash;
+    if (initHash === '#van-ban-chia-se' || initHash === '#shared-docs' || initHash === '#sharedDocsSection') {
+        switchMainView('shared-docs');
+    }
+}
+
+
+// =====================================================================
+// SHARED DOCUMENTS - Văn bản chia sẻ giữa các Ban/Trung tâm
+// =====================================================================
+
+const SD_TYPE_MAP = {
+    'Báo cáo':   { cls: 'sd-type-baocao',   emoji: '📈' },
+    'Biên bản':  { cls: 'sd-type-bienban',  emoji: '📝' },
+    'Hướng dẫn': { cls: 'sd-type-huongdan', emoji: '📖' },
+    'Kế hoạch':  { cls: 'sd-type-kehoach',  emoji: '🗓️' },
+    'Thông báo': { cls: 'sd-type-thongbao', emoji: '📣' },
+    'Tờ trình':  { cls: 'sd-type-totrinh',  emoji: '📄' },
+    'Công văn':  { cls: 'sd-type-congvan',  emoji: '📨' },
+    'Khác':      { cls: 'sd-type-khac',     emoji: '📂' },
+};
+
+const FILE_ICON_MAP = {
+    pdf:  '📕',
+    docx: '📄',
+    doc:  '📄',
+    jpg:  '🖼️',
+    jpeg: '🖼️',
+    png:  '🖼️',
+};
+
+// Filter State
+let sdFilterState = {
+    docType: '',
+    department: '',
+    month: '',         // e.g. '2026-10'
+    date: '',          // e.g. '2026-10-06'
+    search: '',
+    dateObj: new Date() // Month navigation cursor
+};
+let sdSearchTimeout = null;
+let sdCurrentDocId = null;
+
+function sdFormatYearMonth(d) {
+    if (!d) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+}
+
+function updateSDMonthLabel() {
+    const el = document.getElementById('sdMonthLabel');
+    if (el) {
+        const mm = sdFilterState.dateObj.getMonth() + 1;
+        const yyyy = sdFilterState.dateObj.getFullYear();
+        el.textContent = `Tháng ${mm}/${yyyy}`;
+    }
+}
+
+function prevSDMonth() {
+    sdFilterState.dateObj.setMonth(sdFilterState.dateObj.getMonth() - 1);
+    sdFilterState.month = sdFormatYearMonth(sdFilterState.dateObj);
+    sdFilterState.date = '';
+    const dateInput = document.getElementById('sdFilterDate');
+    if (dateInput) dateInput.value = '';
+    const selector = document.getElementById('sdMonthSelector');
+    if (selector) selector.classList.add('active');
+    const labelBtn = document.getElementById('sdFilterMonthBtn');
+    if (labelBtn) labelBtn.classList.add('active');
+    updateSDMonthLabel();
+    loadSharedDocs();
+}
+
+function nextSDMonth() {
+    sdFilterState.dateObj.setMonth(sdFilterState.dateObj.getMonth() + 1);
+    sdFilterState.month = sdFormatYearMonth(sdFilterState.dateObj);
+    sdFilterState.date = '';
+    const dateInput = document.getElementById('sdFilterDate');
+    if (dateInput) dateInput.value = '';
+    const selector = document.getElementById('sdMonthSelector');
+    if (selector) selector.classList.add('active');
+    const labelBtn = document.getElementById('sdFilterMonthBtn');
+    if (labelBtn) labelBtn.classList.add('active');
+    updateSDMonthLabel();
+    loadSharedDocs();
+}
+
+function sdTypeInfo(docType) {
+    return SD_TYPE_MAP[docType] || SD_TYPE_MAP['Khác'];
+}
+
+function fileIcon(filename) {
+    if (!filename) return '📄';
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    return FILE_ICON_MAP[ext] || '📄';
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function sdFormatDateTime(dtStr) {
+    if (!dtStr) return '';
+    try {
+        const d = new Date(dtStr);
+        return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return dtStr; }
+}
+
+function isAdminOrAuthorSD(doc) {
+    if (!currentUser) return false;
+    if (isAdminUser()) return true;
+    return (doc.CreatedBy || '').toLowerCase() === (currentUser.username || '').toLowerCase();
+}
+
+function renderSDCard(doc) {
+    const info = sdTypeInfo(doc.DocType);
+    const hasAttachment = !!doc.AttachmentPath;
+    const attachmentHtml = hasAttachment
+        ? `<span class="sd-card-attachment">${fileIcon(doc.AttachmentName)} ${escapeHtml(doc.AttachmentName || 'Tệp đính kèm')}</span>`
+        : '';
+    const authorDisplay = doc.CreatedByName || doc.CreatedBy || 'Không rõ';
+    const deptDisplay = doc.Department || '';
+    const dateDisplay = sdFormatDateTime(doc.CreatedAt);
+    const contentPreview = (doc.Content || '').trim();
+
+    return `
+    <div class="sd-card" onclick="openSDDetail(${doc.DocID})" data-doc-id="${doc.DocID}">
+        <div class="sd-card-header">
+            <div class="sd-card-icon" style="background: var(--primary-light);">${info.emoji}</div>
+            <div style="flex:1; min-width:0;">
+                <div class="sd-card-title">${escapeHtml(doc.Title)}</div>
+                <div class="flex items-center gap-2" style="margin-top: 4px; flex-wrap: wrap;">
+                    <span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType)}</span>
+                    ${deptDisplay ? `<span class="sd-dept-tag" style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">🏛️ ${escapeHtml(deptDisplay)}</span>` : ''}
+                </div>
+            </div>
+        </div>
+        ${contentPreview ? `<div class="sd-card-content">${escapeHtml(contentPreview)}</div>` : ''}
+        <div class="sd-card-footer">
+            <div class="sd-card-meta">
+                <span>Người đăng: <strong>${escapeHtml(authorDisplay)}</strong></span>
+                <span>${dateDisplay}</span>
+            </div>
+            ${attachmentHtml}
+        </div>
+    </div>`;
+}
+
+async function loadSharedDocs() {
+    const grid = document.getElementById('sdGrid');
+    if (!grid) return;
+    try {
+        let url = '/api/shared-docs?limit=200';
+        if (sdFilterState.docType) url += `&doc_type=${encodeURIComponent(sdFilterState.docType)}`;
+        if (sdFilterState.department) url += `&department=${encodeURIComponent(sdFilterState.department)}`;
+        if (sdFilterState.month) url += `&month=${encodeURIComponent(sdFilterState.month)}`;
+        if (sdFilterState.date) url += `&date=${encodeURIComponent(sdFilterState.date)}`;
+        if (sdFilterState.search && sdFilterState.search.trim()) url += `&search=${encodeURIComponent(sdFilterState.search.trim())}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('API error');
+        const docs = await resp.json();
+
+        const badge = document.getElementById('sdCountBadge');
+        if (badge) badge.textContent = `${docs.length} văn bản`;
+        const navBadge = document.getElementById('navSharedDocsBadge');
+        if (navBadge) navBadge.textContent = docs.length > 0 ? String(docs.length) : 'Mới';
+
+        if (!docs.length) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1; padding: 40px 20px;">
+                    <div class="icon" style="font-size:2.4rem; margin-bottom:12px;">📂</div>
+                    <p style="font-size:1rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Chưa có văn bản nào phù hợp với bộ lọc</p>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">Bạn có thể thử đổi tháng, ban hoặc tìm kiếm từ khóa khác.</p>
+                    ${currentUser ? '<button class="btn btn-sm btn-primary" onclick="openSDUploadModal()" style="margin-top:16px;">+ Đăng văn bản ngay</button>' : ''}
+                </div>`;
+            return;
+        }
+        grid.innerHTML = docs.map(renderSDCard).join('');
+    } catch (e) {
+        console.error('Error loading shared docs:', e);
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><p class="text-muted">Lỗi tải dữ liệu. Vui lòng thử lại.</p></div>';
+    }
+}
+
+async function openSDDetail(docId) {
+    sdCurrentDocId = docId;
+    try {
+        const resp = await fetch(`/api/shared-docs/${docId}`);
+        if (!resp.ok) throw new Error('not found');
+        const doc = await resp.json();
+
+        document.getElementById('sdDetailTitle').textContent = doc.Title || 'Văn bản chia sẻ';
+
+        const info = sdTypeInfo(doc.DocType);
+        const metaEl = document.getElementById('sdDetailMeta');
+        metaEl.innerHTML = `
+            <div class="sd-detail-meta-item">
+                <span class="sd-detail-meta-label">Hình thức</span>
+                <span class="sd-detail-meta-value"><span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType)}</span></span>
+            </div>
+            <div class="sd-detail-meta-item">
+                <span class="sd-detail-meta-label">Đơn vị / Ban</span>
+                <span class="sd-detail-meta-value">${escapeHtml(doc.Department || 'Không rõ')}</span>
+            </div>
+            <div class="sd-detail-meta-item">
+                <span class="sd-detail-meta-label">Người đăng</span>
+                <span class="sd-detail-meta-value">${escapeHtml(doc.CreatedByName || doc.CreatedBy || 'Không rõ')}</span>
+            </div>
+            <div class="sd-detail-meta-item">
+                <span class="sd-detail-meta-label">Ngày đăng</span>
+                <span class="sd-detail-meta-value">${sdFormatDateTime(doc.CreatedAt)}</span>
+            </div>`;
+
+        const contentEl = document.getElementById('sdDetailContent');
+        contentEl.textContent = doc.Content || '';
+        contentEl.style.display = doc.Content ? 'block' : 'none';
+
+        const attEl = document.getElementById('sdDetailAttachment');
+        if (doc.AttachmentPath) {
+            const sizeStr = formatFileSize(doc.AttachmentSize);
+            const icon = fileIcon(doc.AttachmentName);
+            attEl.innerHTML = `
+                <a href="/uploads/${escapeHtml(doc.AttachmentPath)}" target="_blank" rel="noopener">
+                    <span class="file-type-icon">${icon}</span>
+                    <span class="file-info">
+                        <span class="file-name">${escapeHtml(doc.AttachmentName || 'File đính kèm')}</span>
+                        ${sizeStr ? `<span class="file-size">${sizeStr}</span>` : ''}
+                    </span>
+                </a>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);flex-shrink:0;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>`;
+            attEl.style.display = 'flex';
+        } else {
+            attEl.innerHTML = '';
+            attEl.style.display = 'none';
+        }
+
+        const delBtn = document.getElementById('sdDetailDeleteBtn');
+        if (delBtn) delBtn.style.display = isAdminOrAuthorSD(doc) ? 'inline-flex' : 'none';
+
+        openModal('sdDetailModal');
+    } catch (e) {
+        showToast('Không thể tải chi tiết văn bản.', 'error');
+    }
+}
+
+async function deleteSharedDoc() {
+    if (!sdCurrentDocId) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa văn bản này? Hành động này không thể hoàn tác.')) return;
+    try {
+        const resp = await fetch(`/api/shared-docs/${sdCurrentDocId}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.detail || 'Lỗi xóa văn bản', 'error'); return; }
+        showToast('Đã xóa văn bản thành công!', 'success');
+        closeModal('sdDetailModal');
+        sdCurrentDocId = null;
+        loadSharedDocs();
+    } catch (e) {
+        showToast('Lỗi kết nối máy chủ', 'error');
+    }
+}
+
+function openSDUploadModal() {
+    if (!currentUser) {
+        showToast('Vui lòng đăng nhập để đăng văn bản chia sẻ.', 'warning');
+        openModal('loginModal');
+        return;
+    }
+    resetSDForm();
+    // Tự động gán đơn vị của người dùng nếu có
+    const deptSelect = document.getElementById('sdUploadDepartment');
+    if (deptSelect) {
+        if (currentUser.department) {
+            deptSelect.value = currentUser.department;
+            if (!deptSelect.value) {
+                deptSelect.value = '';
+            }
+        } else {
+            deptSelect.value = '';
+        }
+    }
+    openModal('sdUploadModal');
+}
+
+async function submitSharedDoc() {
+    const titleInput = document.getElementById('sdUploadTitle');
+    const docTypeInput = document.getElementById('sdUploadDocType');
+    const deptInput = document.getElementById('sdUploadDepartment');
+    const contentInput = document.getElementById('sdUploadContent');
+    const fileInput = document.getElementById('sdUploadFileInput');
+
+    const title = (titleInput ? titleInput.value : '').trim();
+    const docType = docTypeInput ? docTypeInput.value : '';
+    const department = deptInput ? deptInput.value : '';
+    const content = (contentInput ? contentInput.value : '').trim();
+
+    if (!currentUser) {
+        showToast('Vui lòng đăng nhập để thực hiện.', 'error');
+        openModal('loginModal');
+        return;
+    }
+    if (!title) {
+        showToast('Vui lòng nhập Tiêu đề văn bản.', 'warning');
+        if (titleInput) titleInput.focus();
+        return;
+    }
+    if (!docType) {
+        showToast('Vui lòng chọn Hình thức văn bản.', 'warning');
+        if (docTypeInput) docTypeInput.focus();
+        return;
+    }
+
+    const btn = document.getElementById('sdUploadSubmitBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Đang tải lên...';
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('doc_type', docType);
+        if (department) formData.append('department', department);
+        if (content) formData.append('content', content);
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            formData.append('attachment', fileInput.files[0]);
+        }
+
+        const resp = await fetch('/api/shared-docs', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.detail || 'Lỗi tải lên văn bản.', 'error');
+            return;
+        }
+
+        showToast(data.message || 'Tải lên văn bản thành công!', 'success');
+        closeModal('sdUploadModal');
+        resetSDForm();
+        loadSharedDocs();
+    } catch (e) {
+        console.error('Error submitting shared doc:', e);
+        showToast('Lỗi kết nối máy chủ.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg> Đăng văn bản`;
+        }
+    }
+}
+
+function resetSDForm() {
+    const form = document.getElementById('sdUploadForm');
+    if (form) form.reset();
+    const fi = document.getElementById('sdUploadFileInput');
+    if (fi) fi.value = '';
+    const preview = document.getElementById('sdUploadFilePreview');
+    const drop = document.getElementById('sdUploadFileDrop');
+    if (preview) preview.style.display = 'none';
+    if (drop) drop.style.display = 'flex';
+}
+
+function showSDFilePreview(file) {
+    if (!file) return;
+    const allowed = ['pdf', 'docx', 'jpg', 'jpeg', 'png'];
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!allowed.includes(ext)) {
+        showToast('Chỉ cho phép định dạng: PDF, DOCX, JPG, PNG.', 'error');
+        return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+        showToast('File vượt quá giới hạn dung lượng 25MB.', 'error');
+        return;
+    }
+    const iconEl = document.getElementById('sdUploadFileIcon');
+    const nameEl = document.getElementById('sdUploadFileName');
+    const sizeEl = document.getElementById('sdUploadFileSize');
+    const preview = document.getElementById('sdUploadFilePreview');
+    const drop = document.getElementById('sdUploadFileDrop');
+
+    if (iconEl) iconEl.textContent = fileIcon(file.name);
+    if (nameEl) nameEl.textContent = file.name;
+    if (sizeEl) sizeEl.textContent = formatFileSize(file.size);
+    if (drop) drop.style.display = 'none';
+    if (preview) preview.style.display = 'flex';
+}
+
+function updateSDUploadBtnVisibility() {
+    const btn = document.getElementById('sdUploadBtn');
+    if (btn) {
+        btn.style.display = (currentUser && currentUser.logged_in) ? 'inline-flex' : 'none';
+    }
+}
+
+function initSharedDocs() {
+    // Khởi tạo tháng hiện tại mặc định
+    sdFilterState.dateObj = new Date();
+    sdFilterState.month = sdFormatYearMonth(sdFilterState.dateObj);
+    sdFilterState.date = '';
+    updateSDMonthLabel();
+
+    // Upload button
+    const uploadBtn = document.getElementById('sdUploadBtn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', openSDUploadModal);
+    }
+
+    // Filter by DocType
+    document.querySelectorAll('[data-sd-type]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-sd-type]').forEach(b => {
+                b.classList.remove('active', 'btn-secondary');
+                b.classList.add('btn-ghost');
+            });
+            btn.classList.remove('btn-ghost');
+            btn.classList.add('active', 'btn-secondary');
+            sdFilterState.docType = btn.getAttribute('data-sd-type');
+            loadSharedDocs();
+        });
+    });
+
+    // Filter by Department
+    const deptSelect = document.getElementById('sdFilterDept');
+    if (deptSelect) {
+        deptSelect.addEventListener('change', (e) => {
+            sdFilterState.department = e.target.value;
+            loadSharedDocs();
+        });
+    }
+
+    // Month Navigation (Prev / Next)
+    const prevBtn = document.getElementById('sdMonthPrevBtn');
+    if (prevBtn) prevBtn.addEventListener('click', prevSDMonth);
+
+    const nextBtn = document.getElementById('sdMonthNextBtn');
+    if (nextBtn) nextBtn.addEventListener('click', nextSDMonth);
+
+    const filterMonthBtn = document.getElementById('sdFilterMonthBtn');
+    if (filterMonthBtn) {
+        filterMonthBtn.addEventListener('click', () => {
+            sdFilterState.month = sdFormatYearMonth(sdFilterState.dateObj);
+            sdFilterState.date = '';
+            const dateInput = document.getElementById('sdFilterDate');
+            if (dateInput) dateInput.value = '';
+            const selector = document.getElementById('sdMonthSelector');
+            if (selector) selector.classList.add('active');
+            filterMonthBtn.classList.add('active');
+            loadSharedDocs();
+        });
+    }
+
+    // Filter by specific Date from Calendar
+    const dateInput = document.getElementById('sdFilterDate');
+    if (dateInput) {
+        dateInput.addEventListener('change', (e) => {
+            if (e.target.value) {
+                sdFilterState.date = e.target.value;
+                sdFilterState.month = '';
+                const selector = document.getElementById('sdMonthSelector');
+                if (selector) selector.classList.remove('active');
+                const labelBtn = document.getElementById('sdFilterMonthBtn');
+                if (labelBtn) labelBtn.classList.remove('active');
+                loadSharedDocs();
+            }
+        });
+    }
+
+    // Filter All Time Button
+    const allTimeBtn = document.getElementById('sdFilterAllTimeBtn');
+    if (allTimeBtn) {
+        allTimeBtn.addEventListener('click', () => {
+            sdFilterState.month = '';
+            sdFilterState.date = '';
+            const dateInput = document.getElementById('sdFilterDate');
+            if (dateInput) dateInput.value = '';
+            const selector = document.getElementById('sdMonthSelector');
+            if (selector) selector.classList.remove('active');
+            const labelBtn = document.getElementById('sdFilterMonthBtn');
+            if (labelBtn) labelBtn.classList.remove('active');
+            loadSharedDocs();
+        });
+    }
+
+    // Search input (Debounce)
+    const searchInput = document.getElementById('sdSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(sdSearchTimeout);
+            sdSearchTimeout = setTimeout(() => {
+                sdFilterState.search = e.target.value;
+                loadSharedDocs();
+            }, 350);
+        });
+    }
+
+    // File input preview
+    const fileInput = document.getElementById('sdUploadFileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files[0]) {
+                showSDFilePreview(fileInput.files[0]);
+            }
+        });
+    }
+
+    // Remove file button
+    const removeBtn = document.getElementById('sdUploadFileRemove');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const fi = document.getElementById('sdUploadFileInput');
+            if (fi) fi.value = '';
+            const preview = document.getElementById('sdUploadFilePreview');
+            const drop = document.getElementById('sdUploadFileDrop');
+            if (preview) preview.style.display = 'none';
+            if (drop) drop.style.display = 'flex';
+        });
+    }
+
+    // Drag and drop for upload modal
+    const dropZone = document.getElementById('sdUploadFileDrop');
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files && files[0]) {
+                const fi = document.getElementById('sdUploadFileInput');
+                if (fi) {
+                    const dt = new DataTransfer();
+                    dt.items.add(files[0]);
+                    fi.files = dt.files;
+                }
+                showSDFilePreview(files[0]);
+            }
+        });
+    }
+
+    updateSDUploadBtnVisibility();
+    initRouting();
+}
