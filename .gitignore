@@ -30,3 +30,10 @@ Thumbs.db
 # OS generated files
 ehthumbs.db
 [Nn]on[Dd]istributable/
+
+# Uploaded documents & attachments
+uploads/
+
+# Internal reports & notes
+reports/
+BAO_CAO_*.md
