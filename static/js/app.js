@@ -3395,6 +3395,14 @@ function sdFormatDateTime(dtStr) {
     } catch (e) { return dtStr; }
 }
 
+function sdFormatShortDate(dtStr) {
+    if (!dtStr) return '';
+    try {
+        const d = new Date(dtStr);
+        return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (e) { return dtStr; }
+}
+
 function isAdminOrAuthorSD(doc) {
     if (!currentUser) return false;
     if (isAdminUser()) return true;
@@ -3403,34 +3411,23 @@ function isAdminOrAuthorSD(doc) {
 
 function renderSDCard(doc) {
     const info = sdTypeInfo(doc.DocType);
+    const deptDisplay = doc.Department || 'Chưa phân ban';
+    const dateDisplay = sdFormatShortDate(doc.CreatedAt);
     const hasAttachment = !!doc.AttachmentPath;
-    const attachmentHtml = hasAttachment
-        ? `<span class="sd-card-attachment">${fileIcon(doc.AttachmentName)} ${escapeHtml(doc.AttachmentName || 'Tệp đính kèm')}</span>`
-        : '';
-    const authorDisplay = doc.CreatedByName || doc.CreatedBy || 'Không rõ';
-    const deptDisplay = doc.Department || '';
-    const dateDisplay = sdFormatDateTime(doc.CreatedAt);
-    const contentPreview = (doc.Content || '').trim();
 
     return `
-    <div class="sd-card" onclick="openSDDetail(${doc.DocID})" data-doc-id="${doc.DocID}">
-        <div class="sd-card-header">
-            <div class="sd-card-icon" style="background: var(--primary-light);">${info.emoji}</div>
-            <div style="flex:1; min-width:0;">
-                <div class="sd-card-title">${escapeHtml(doc.Title)}</div>
-                <div class="flex items-center gap-2" style="margin-top: 4px; flex-wrap: wrap;">
-                    <span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType)}</span>
-                    ${deptDisplay ? `<span class="sd-dept-tag" style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">🏛️ ${escapeHtml(deptDisplay)}</span>` : ''}
-                </div>
+    <div class="sd-list-item" onclick="openSDDetail(${doc.DocID})" data-doc-id="${doc.DocID}" title="Nhấp để xem chi tiết văn bản">
+        <div class="sd-item-left">
+            <span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType || 'Khác')}</span>
+            <div class="sd-item-title-wrap">
+                <span class="sd-item-title">${escapeHtml(doc.Title)}</span>
+                ${hasAttachment ? '<span class="sd-item-attach-icon" title="Có tệp đính kèm">📎</span>' : ''}
             </div>
         </div>
-        ${contentPreview ? `<div class="sd-card-content">${escapeHtml(contentPreview)}</div>` : ''}
-        <div class="sd-card-footer">
-            <div class="sd-card-meta">
-                <span>Người đăng: <strong>${escapeHtml(authorDisplay)}</strong></span>
-                <span>${dateDisplay}</span>
-            </div>
-            ${attachmentHtml}
+        <div class="sd-item-right">
+            <span class="sd-item-dept" title="Đơn vị / Ban ban hành">🏛️ ${escapeHtml(deptDisplay)}</span>
+            <span class="sd-item-date">${dateDisplay}</span>
+            <span class="sd-item-arrow">›</span>
         </div>
     </div>`;
 }

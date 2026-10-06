@@ -1541,8 +1541,27 @@ def get_shared_documents(
             query += " AND DocType = ?"
             params.append(doc_type.strip())
         if department and department.strip():
-            query += " AND (Department = ? OR Department LIKE ?)"
-            params.extend([department.strip(), f"%{department.strip()}%"])
+            dept_val = department.strip()
+            # Normalize and support variations like TT <-> Trung tâm, TTPHTL, TFS, PTGĐ
+            sub_clauses = ["Department = ?", "Department LIKE ?"]
+            params.extend([dept_val, f"%{dept_val}%"])
+
+            # Map common variants
+            clean_name = dept_val.replace("Trung tâm", "").replace("TT", "").replace("Ban", "").strip()
+            if clean_name and len(clean_name) >= 3:
+                sub_clauses.append("Department LIKE ?")
+                params.append(f"%{clean_name}%")
+
+            if "Phát hình" in dept_val or "Tư liệu" in dept_val or dept_val == "TTPHTL":
+                sub_clauses.extend(["Department = 'TTPHTL'", "Department LIKE '%TTPHTL%'"])
+            elif "Hãng phim" in dept_val or "TFS" in dept_val:
+                sub_clauses.append("Department LIKE '%TFS%'")
+            elif "Văn phòng" in dept_val:
+                sub_clauses.append("Department LIKE '%Văn phòng%'")
+            elif "Giám đốc" in dept_val or dept_val.startswith("PTGĐ"):
+                sub_clauses.extend(["Department LIKE '%Giám đốc%'", "Department LIKE '%PTGĐ%'"])
+
+            query += f" AND ({' OR '.join(sub_clauses)})"
         if search and search.strip():
             query += " AND (Title LIKE ? OR Content LIKE ?)"
             params.extend([f"%{search.strip()}%", f"%{search.strip()}%"])
