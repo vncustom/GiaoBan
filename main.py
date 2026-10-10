@@ -151,7 +151,11 @@ def can_edit_report(user: dict, report_dept: str) -> bool:
     if is_ban_phu_trach(user):
         user_dept = (user.get("department") or "").strip().lower()
         rd = (report_dept or "").strip().lower()
-        return user_dept == rd or user_dept in rd or rd in user_dept
+        if not user_dept:
+            return False
+        # Nếu report_dept chứa nhiều đơn vị phân cách bởi dấu phẩy hoặc chấm phẩy
+        parts = [p.strip().lower() for p in rd.replace(";", ",").split(",") if p.strip()]
+        return user_dept == rd or user_dept in rd or rd in user_dept or any(user_dept == p or user_dept in p or p in user_dept for p in parts)
     return False
 
 
@@ -259,6 +263,7 @@ class MeetingCreateRequest(BaseModel):
     secretary: Optional[str] = None
     secretary_title: Optional[str] = Field(None, alias="secretaryTitle")
     attendees: Optional[str] = None
+    meeting_type: Optional[str] = Field("Họp giao ban tuyên truyền hàng ngày", alias="meetingType")
 
     class Config:
         populate_by_name = True
@@ -275,6 +280,7 @@ class MeetingUpdateRequest(BaseModel):
     secretary_title: Optional[str] = Field(None, alias="secretaryTitle")
     attendees: Optional[str] = None
     status: Optional[str] = None
+    meeting_type: Optional[str] = Field(None, alias="meetingType")
 
     class Config:
         populate_by_name = True
@@ -521,6 +527,7 @@ def api_create_meeting(req: MeetingCreateRequest, request: Request):
         attendees=req.attendees,
         status="Draft",
         created_by=user.get("username"),
+        meeting_type=req.meeting_type or "Họp giao ban tuyên truyền hàng ngày",
     )
     return {"success": True, "message": "Tạo cuộc họp thành công!", "meeting_id": meeting_id}
 
@@ -562,6 +569,8 @@ def api_update_meeting(meeting_id: int, req: MeetingUpdateRequest, request: Requ
         update_data["Attendees"] = req.attendees
     if req.status is not None:
         update_data["Status"] = req.status
+    if req.meeting_type is not None:
+        update_data["MeetingType"] = req.meeting_type
 
     success = db_service.update_meeting(meeting_id, **update_data)
     if not success:
@@ -578,6 +587,29 @@ def api_delete_meeting(meeting_id: int, request: Request):
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy cuộc họp.")
     return {"success": True, "message": "Xóa cuộc họp thành công!"}
+
+
+class DeleteCategoryRequest(BaseModel):
+    section_type: str = Field(..., alias="section_type")
+    category: str
+
+
+@app.post("/api/meetings/{meeting_id}/categories/delete")
+def api_delete_meeting_category(meeting_id: int, req: DeleteCategoryRequest, request: Request):
+    user = get_current_user(request)
+    if not user.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.")
+    if not is_vpd_user(user) and not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Chỉ BPT Văn phòng Đài hoặc Admin mới có quyền xóa đề mục.")
+
+    meeting = db_service.get_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Không tìm thấy cuộc họp.")
+
+    success = db_service.delete_meeting_category(meeting_id, req.section_type, req.category)
+    if not success:
+        raise HTTPException(status_code=400, detail="Không thể xóa đề mục.")
+    return {"success": True, "message": "Xóa đề mục thành công!"}
 
 
 # ===================== REPORTS =====================

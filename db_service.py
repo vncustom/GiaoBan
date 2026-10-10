@@ -180,6 +180,37 @@ def init_db():
             ALTER TABLE Directives ADD CooperatingUnit NVARCHAR(MAX);
         """)
 
+        # Thêm cột MeetingType vào Meetings nếu chưa có (migration)
+        cursor.execute("""
+            IF NOT EXISTS (
+                SELECT * FROM sys.columns
+                WHERE object_id = OBJECT_ID('Meetings') AND name = 'MeetingType'
+            )
+            ALTER TABLE Meetings ADD MeetingType NVARCHAR(255) DEFAULT N'Họp giao ban tuyên truyền hàng ngày';
+        """)
+        cursor.execute("""
+            UPDATE Meetings SET MeetingType = N'Họp giao ban tuyên truyền hàng ngày'
+            WHERE MeetingType IS NULL OR MeetingType = '';
+        """)
+
+        # Mở rộng cột Department của MeetingReports lên NVARCHAR(1000) để lưu nhiều đơn vị báo cáo
+        cursor.execute("""
+            IF EXISTS (
+                SELECT * FROM sys.columns
+                WHERE object_id = OBJECT_ID('MeetingReports') AND name = 'Department'
+            )
+            ALTER TABLE MeetingReports ALTER COLUMN Department NVARCHAR(1000);
+        """)
+
+        # Thêm cột DeletedCategories vào Meetings nếu chưa có (migration)
+        cursor.execute("""
+            IF NOT EXISTS (
+                SELECT * FROM sys.columns
+                WHERE object_id = OBJECT_ID('Meetings') AND name = 'DeletedCategories'
+            )
+            ALTER TABLE Meetings ADD DeletedCategories NVARCHAR(MAX) DEFAULT '';
+        """)
+
         # 7. Bảng DirectiveComments - Bình luận về chỉ đạo
         cursor.execute("""
             IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DirectiveComments')
@@ -524,19 +555,20 @@ def create_meeting(
     attendees: Optional[str] = None,
     status: str = "Draft",
     created_by: Optional[str] = None,
+    meeting_type: str = "Họp giao ban tuyên truyền hàng ngày",
 ) -> int:
     """Tạo cuộc họp giao ban mới."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO Meetings (MeetingDate, StartTime, EndTime, Location, Chairman, ChairmanTitle, Secretary, SecretaryTitle, Attendees, Status, CreatedBy)
+            """INSERT INTO Meetings (MeetingDate, StartTime, EndTime, Location, Chairman, ChairmanTitle, Secretary, SecretaryTitle, Attendees, Status, CreatedBy, MeetingType)
                OUTPUT INSERTED.MeetingID
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 meeting_date, start_time, end_time, location,
                 chairman, chairman_title, secretary, secretary_title,
-                attendees, status, created_by,
+                attendees, status, created_by, meeting_type or "Họp giao ban tuyên truyền hàng ngày",
             ),
         )
         meeting_id = cursor.fetchone()[0]
@@ -562,7 +594,7 @@ def get_meetings(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     status: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 1000,
 ) -> List[Dict[str, Any]]:
     """Lấy danh sách cuộc họp theo bộ lọc."""
     conn = get_db_connection()
@@ -602,7 +634,7 @@ def update_meeting(meeting_id: int, **kwargs) -> bool:
         allowed_fields = [
             "MeetingDate", "StartTime", "EndTime", "Location",
             "Chairman", "ChairmanTitle", "Secretary", "SecretaryTitle",
-            "Attendees", "Status",
+            "Attendees", "Status", "MeetingType", "DeletedCategories",
         ]
         for key, value in kwargs.items():
             if key in allowed_fields:
@@ -660,6 +692,7 @@ def create_report(
         )
         report_id = cursor.fetchone()[0]
         conn.commit()
+        restore_meeting_category_if_needed(meeting_id, category)
         return report_id
     finally:
         conn.close()
@@ -764,6 +797,7 @@ def create_directive(
         )
         directive_id = cursor.fetchone()[0]
         conn.commit()
+        restore_meeting_category_if_needed(meeting_id, category)
         return directive_id
     finally:
         conn.close()
@@ -877,6 +911,63 @@ def delete_directive(directive_id: int) -> bool:
         rows_affected = cursor.rowcount
         conn.commit()
         return rows_affected > 0
+    finally:
+        conn.close()
+
+
+def delete_meeting_category(meeting_id: int, section_type: str, category: str) -> bool:
+    """Xóa 1 đề mục trong cuộc họp và toàn bộ báo cáo/chỉ đạo thuộc đề mục đó."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DeletedCategories FROM Meetings WHERE MeetingID = ?", (meeting_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        current_del = row[0] or ""
+        del_list = [c.strip() for c in current_del.split(",") if c.strip()]
+        if category not in del_list:
+            del_list.append(category)
+        new_del = ",".join(del_list)
+
+        cursor.execute(
+            "UPDATE Meetings SET DeletedCategories = ?, UpdatedAt = GETDATE() WHERE MeetingID = ?",
+            (new_del, meeting_id),
+        )
+
+        if section_type == "report":
+            cursor.execute("DELETE FROM MeetingReports WHERE MeetingID = ? AND Category = ?", (meeting_id, category))
+        elif section_type == "directive":
+            cursor.execute("DELETE FROM Directives WHERE MeetingID = ? AND Category = ?", (meeting_id, category))
+
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def restore_meeting_category_if_needed(meeting_id: int, category: str) -> None:
+    """Khôi phục lại category nếu trước đó đã bị xóa (khi người dùng thêm báo cáo/chỉ đạo mới vào category này)."""
+    if not category:
+        return
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DeletedCategories FROM Meetings WHERE MeetingID = ?", (meeting_id,))
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            return
+        del_list = [c.strip() for c in row[0].split(",") if c.strip()]
+        if category in del_list:
+            del_list.remove(category)
+            new_del = ",".join(del_list)
+            cursor.execute(
+                "UPDATE Meetings SET DeletedCategories = ?, UpdatedAt = GETDATE() WHERE MeetingID = ?",
+                (new_del, meeting_id),
+            )
+            conn.commit()
+    except Exception:
+        pass
     finally:
         conn.close()
 

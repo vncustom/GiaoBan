@@ -56,6 +56,8 @@ BEGIN
         SecretaryTitle NVARCHAR(255),
         Attendees NVARCHAR(MAX),
         Status NVARCHAR(50) DEFAULT 'Draft',
+        MeetingType NVARCHAR(255) DEFAULT N'Họp giao ban tuyên truyền hàng ngày',
+        DeletedCategories NVARCHAR(MAX) DEFAULT '',
         CreatedBy NVARCHAR(255),
         CreatedAt DATETIME DEFAULT GETDATE(),
         UpdatedAt DATETIME DEFAULT GETDATE()

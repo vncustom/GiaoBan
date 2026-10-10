@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Ban HTV</title>
     <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
-    <link rel="stylesheet" href="/static/css/style.css?v=8">
+    <link rel="stylesheet" href="/static/css/style.css?v=9">
     <!-- Script chống flash trắng/đen khi load -->
     <script>
         (function() {
@@ -351,6 +351,9 @@
                         <p>Chưa có cuộc họp nào</p>
                     </div>
                 </div>
+
+                <!-- Phân trang danh sách cuộc họp -->
+                <div id="meetingsPagination" class="directive-pagination" style="display: none; margin-top: 16px;"></div>
             </section>
         </div> <!-- End viewGiaoBan -->
 
@@ -692,6 +695,18 @@
             <div class="modal-body">
                 <form id="meetingForm">
                     <input type="hidden" id="meetingFormId">
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label">Thể loại cuộc họp *</label>
+                        <input type="text" class="form-input" id="mfMeetingType" list="meetingTypeSuggestions" value="Họp giao ban tuyên truyền hàng ngày" placeholder="VD: Họp giao ban tuyên truyền hàng ngày, Họp khối Kỹ thuật, Họp Truyền thông Chính Sách..." required>
+                        <datalist id="meetingTypeSuggestions">
+                            <option value="Họp giao ban tuyên truyền hàng ngày"></option>
+                            <option value="Họp khối Kỹ thuật"></option>
+                            <option value="Họp Truyền thông Chính Sách"></option>
+                            <option value="Họp Ban Tổng Giám đốc"></option>
+                            <option value="Họp giao ban tuần"></option>
+                            <option value="Họp chuyên đề"></option>
+                        </datalist>
+                    </div>
                     <div class="form-row-3">
                         <div class="form-group">
                             <label class="form-label">Ngày họp *</label>
@@ -754,38 +769,17 @@
                 <form id="reportForm">
                     <input type="hidden" id="rfMeetingId">
                     <input type="hidden" id="rfReportId">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Đơn vị báo cáo *</label>
-                            <select class="form-select" id="rfDepartment" required>
-                                <option value="">-- Chọn đơn vị --</option>
-                                <option value="Không đơn vị">-- Không đơn vị --</option>
-                                <option value="Ban Chương trình">Ban Chương trình</option>
-                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                <option value="Ban Chuyên đề">Ban Chuyên đề</option>
-                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                <option value="Ban Khoa giáo">Ban Khoa giáo</option>
-                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
-                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                <option value="Văn phòng">Văn phòng Đài</option>
-                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                <option value="Ban Chiến lược">Ban Chiến lược</option>
-                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                <option value="Ban Kỹ thuật cơ điện lạnh">Ban Kỹ thuật cơ điện lạnh</option>
-                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                <option value="Công ty TMS">Công ty TMS</option>
-                            </select>
+                    <div class="form-row" style="align-items: flex-start;">
+                        <div class="form-group" style="flex: 1.2;">
+                            <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                                <label class="form-label" style="margin-bottom: 0;">Đơn vị báo cáo *</label>
+                                <button type="button" class="btn-text-action" id="rfAddDeptBtn" title="Thêm đơn vị báo cáo">+ Thêm đơn vị báo cáo</button>
+                            </div>
+                            <div id="rfDeptList" class="assigned-units-container">
+                                <!-- Đơn vị báo cáo sẽ được thêm tự động qua JavaScript -->
+                            </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="flex: 1;">
                             <label class="form-label">Loại báo cáo</label>
                             <select class="form-select" id="rfCategory" onchange="toggleCategoryCustom(this, 'rfCategoryCustom')">
                                 <option value="noi_dung">Nội dung & Tuyên truyền</option>
@@ -1466,6 +1460,6 @@
         }
         window.toggleCategoryCustom = toggleCategoryCustom;
     </script>
-    <script src="/static/js/app.js?v=11"></script>
+    <script src="/static/js/app.js?v=12"></script>
 </body>
 </html>

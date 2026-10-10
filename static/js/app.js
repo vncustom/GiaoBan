@@ -34,6 +34,11 @@ const HERO_DIRECTIVES_PER_PAGE = 2; // Mỗi page 2 ngày theo yêu cầu ngư�
 let heroMonthDate = new Date(); // Tháng đang xem
 let cachedHeroDirectives = [];
 
+// Phân trang danh sách Cuộc họp giao ban
+let cachedMeetings = [];
+let meetingsPage = 1;
+const MEETINGS_PER_PAGE = 8; // 8 cuộc họp mỗi trang giúp giao diện gọn gàng
+
 const DEPARTMENT_OPTIONS = [
     { value: '', label: '-- Toàn Đài / Chung cho các Ban --' },
     { value: 'Các Trưởng Ban', label: 'Các Trưởng Ban / Đơn vị' },
@@ -107,6 +112,68 @@ function addCoopUnitRow(containerId, selectClass, selectedVal = '') {
             ${buildCoopOptionsHtml(selectedVal)}
         </select>
         <button type="button" class="btn-remove-unit" title="Xóa đơn vị phối hợp" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+// Danh mục đơn vị cho Báo cáo (có thêm tùy chọn 'Không đơn vị')
+const REPORT_DEPARTMENT_OPTIONS = [
+    { value: '', label: '-- Chọn đơn vị --' },
+    { value: 'Không đơn vị', label: '-- Không đơn vị --' },
+    { value: 'Ban Chương trình', label: 'Ban Chương trình' },
+    { value: 'Trung tâm Tin tức', label: 'Trung tâm Tin tức' },
+    { value: 'Trung tâm Phát thanh', label: 'Trung tâm Phát thanh' },
+    { value: 'Trung tâm Phát triển nội dung số', label: 'TT Phát triển nội dung số' },
+    { value: 'Ban Chuyên đề', label: 'Ban Chuyên đề' },
+    { value: 'Ban Văn nghệ', label: 'Ban Văn nghệ' },
+    { value: 'Ban Khoa giáo', label: 'Ban Khoa giáo' },
+    { value: 'Ban Thể dục Thể thao', label: 'Ban Thể dục Thể thao' },
+    { value: 'Hãng phim Truyền hình (TFS)', label: 'Hãng phim Truyền hình (TFS)' },
+    { value: 'Trung tâm HTV Bình Dương', label: 'TT HTV Bình Dương' },
+    { value: 'Trung tâm HTV Bà Rịa', label: 'TT HTV Bà Rịa' },
+    { value: 'Văn phòng Hà Nội', label: 'Văn phòng Hà Nội' },
+    { value: 'Văn phòng Đài', label: 'Văn phòng Đài' },
+    { value: 'Ban Tổ chức - Đào tạo', label: 'Ban Tổ chức - Đào tạo' },
+    { value: 'Ban Chiến lược', label: 'Ban Chiến lược' },
+    { value: 'Ban Kế hoạch - Tài chính', label: 'Ban Kế hoạch - Tài chính' },
+    { value: 'Ban Kỹ thuật công nghệ', label: 'Ban Kỹ thuật công nghệ' },
+    { value: 'Ban Kỹ thuật cơ điện lạnh', label: 'Ban Kỹ thuật cơ điện lạnh' },
+    { value: 'Trung tâm Sản xuất chương trình', label: 'TT Sản xuất chương trình' },
+    { value: 'Trung tâm Truyền dẫn Phát sóng', label: 'TT Truyền dẫn Phát sóng' },
+    { value: 'Trung tâm Phát hình - Tư liệu', label: 'TT Phát hình - Tư liệu' },
+    { value: 'Trung tâm Dịch vụ truyền thông', label: 'TT Dịch vụ truyền thông' },
+    { value: 'Công ty TMS', label: 'Công ty TMS' },
+];
+
+function buildReportDepartmentOptionsHtml(selectedVal = '') {
+    const s = (selectedVal || '').trim().toLowerCase();
+    return REPORT_DEPARTMENT_OPTIONS.map(opt => {
+        const v = (opt.value || '').trim().toLowerCase();
+        let isSel = '';
+        if (s && v) {
+            if (v === s || v.includes(s) || s.includes(v)) {
+                isSel = 'selected';
+            }
+        } else if (!s && !v) {
+            isSel = 'selected';
+        }
+        return `<option value="${escapeHtml(opt.value)}" ${isSel}>${escapeHtml(opt.label)}</option>`;
+    }).join('');
+}
+
+function addReportDeptRow(containerId = 'rfDeptList', selectedVal = '', isFirst = false) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'assigned-unit-row';
+    const removeBtn = !isFirst
+        ? `<button type="button" class="btn-remove-unit" title="Xóa đơn vị này" onclick="this.parentElement.remove()">✕</button>`
+        : '';
+    row.innerHTML = `
+        <select class="form-select rf-dept-select">
+            ${buildReportDepartmentOptionsHtml(selectedVal)}
+        </select>
+        ${removeBtn}
     `;
     container.appendChild(row);
 }
@@ -307,7 +374,9 @@ function canEditReport(reportDept, createdBy) {
     if (isBPT && reportDept && reportDept.toLowerCase() !== 'không đơn vị') {
         const ud = (currentUser.department || '').toLowerCase();
         const rd = (reportDept || '').toLowerCase();
-        return ud === rd || ud.includes(rd) || rd.includes(ud);
+        if (ud === rd || ud.includes(rd) || rd.includes(ud)) return true;
+        const parts = rd.replace(/;/g, ',').split(',').map(s => s.trim()).filter(Boolean);
+        return parts.some(p => p === ud || p.includes(ud) || ud.includes(p));
     }
     return false;
 }
@@ -326,6 +395,8 @@ function bindEvents() {
 
     // Reports
     document.getElementById('reportFormSubmit').addEventListener('click', handleReportSubmit);
+    const rfAddDeptBtn = document.getElementById('rfAddDeptBtn');
+    if (rfAddDeptBtn) rfAddDeptBtn.addEventListener('click', () => addReportDeptRow('rfDeptList', '', false));
 
     // Directives
     document.getElementById('directiveFormSubmit').addEventListener('click', handleDirectiveSubmit);
@@ -947,6 +1018,7 @@ let meetingsFilter = { type: 'all' };
 
 function filterMeetings(type, dateValue) {
     meetingsFilter = { type, dateValue };
+    meetingsPage = 1;
     ['filterTodayBtn','filterWeekBtn','filterMonthBtn','filterAllBtn'].forEach(id => {
         document.getElementById(id).classList.remove('active');
     });
@@ -981,32 +1053,63 @@ async function loadMeetings() {
 
         const resp = await fetch(`/api/meetings${params}`);
         const meetings = await resp.json();
-        renderMeetings(meetings);
+        cachedMeetings = meetings || [];
+        renderMeetingsPaged();
     } catch (e) {
         console.error('Error loading meetings:', e);
     }
 }
 
+function changeMeetingsPage(page) {
+    meetingsPage = page;
+    renderMeetingsPaged();
+    const section = document.getElementById('meetingsSection');
+    if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
 function renderMeetings(meetings) {
+    if (meetings) cachedMeetings = meetings;
+    renderMeetingsPaged();
+}
+
+function renderMeetingsPaged() {
     const container = document.getElementById('meetingsList');
-    
-    if (!meetings || meetings.length === 0) {
+    const paginationContainer = document.getElementById('meetingsPagination');
+    if (!container) return;
+
+    if (!cachedMeetings || cachedMeetings.length === 0) {
         container.innerHTML = `<div class="empty-state"><div class="icon">📂</div><p>Chưa có cuộc họp nào</p></div>`;
+        if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+            paginationContainer.innerHTML = '';
+        }
         return;
     }
 
+    const totalItems = cachedMeetings.length;
+    const totalPages = Math.ceil(totalItems / MEETINGS_PER_PAGE);
+    if (meetingsPage > totalPages) meetingsPage = totalPages;
+    if (meetingsPage < 1) meetingsPage = 1;
+
+    const startIndex = (meetingsPage - 1) * MEETINGS_PER_PAGE;
+    const endIndex = Math.min(startIndex + MEETINGS_PER_PAGE, totalItems);
+    const pagedMeetings = cachedMeetings.slice(startIndex, endIndex);
+
     let html = '';
-    meetings.forEach((m, i) => {
+    pagedMeetings.forEach((m, i) => {
         const dateStr = formatDbDateVi(m.MeetingDate);
         const statusClass = (m.Status || 'Draft').toLowerCase();
         const statusLabel = m.Status === 'Published' ? 'Đã công bố' : 'Bản nháp';
+        const meetingType = m.MeetingType || 'Họp giao ban tuyên truyền hàng ngày';
 
         html += `
         <div class="meeting-card" id="meeting-${m.MeetingID}" style="animation-delay: ${i * 0.05}s">
             <div class="meeting-header" onclick="toggleMeeting(${m.MeetingID})">
                 <div class="meeting-header-left">
                     <span class="meeting-date-badge">${dateStr}</span>
-                    <span class="meeting-title-text">Họp giao ban tuyên truyền hằng ngày</span>
+                    <span class="meeting-title-text">${escapeHtml(meetingType)}</span>
                     <span class="meeting-status ${statusClass}">${statusLabel}</span>
                 </div>
                 <span class="meeting-toggle">▼</span>
@@ -1018,6 +1121,41 @@ function renderMeetings(meetings) {
     });
 
     container.innerHTML = html;
+
+    // Render thanh điều hướng phân trang
+    if (!paginationContainer) return;
+    if (totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        paginationContainer.innerHTML = '';
+        return;
+    }
+
+    paginationContainer.style.display = 'flex';
+    let pagesHtml = '';
+    for (let p = 1; p <= totalPages; p++) {
+        if (p === 1 || p === totalPages || (p >= meetingsPage - 1 && p <= meetingsPage + 1)) {
+            pagesHtml += `<button type="button" class="pagination-page ${p === meetingsPage ? 'active' : ''}" onclick="changeMeetingsPage(${p})">${p}</button>`;
+        } else if (p === meetingsPage - 2 || p === meetingsPage + 2) {
+            pagesHtml += `<span class="pagination-ellipsis">...</span>`;
+        }
+    }
+
+    paginationContainer.innerHTML = `
+        <div class="pagination-info">
+            Hiển thị cuộc họp <strong>${startIndex + 1} - ${endIndex}</strong> trong tổng số <strong>${totalItems} cuộc họp</strong>
+        </div>
+        <div class="pagination-controls">
+            <button type="button" class="pagination-btn" ${meetingsPage <= 1 ? 'disabled' : ''} onclick="changeMeetingsPage(${meetingsPage - 1})">
+                ‹ Trước
+            </button>
+            <div class="pagination-pages">
+                ${pagesHtml}
+            </div>
+            <button type="button" class="pagination-btn" ${meetingsPage >= totalPages ? 'disabled' : ''} onclick="changeMeetingsPage(${meetingsPage + 1})">
+                Sau ›
+            </button>
+        </div>
+    `;
 }
 
 async function toggleMeeting(meetingId) {
@@ -1054,6 +1192,7 @@ function renderMeetingDetail(meeting, reports, directives) {
     // I. Thông tin cuộc họp
     let infoHtml = `
     <div class="meeting-info-grid">
+        <div class="info-item"><span class="info-label">Thể loại</span><span class="info-value" style="font-weight:600;color:var(--primary);">${escapeHtml(m.MeetingType || 'Họp giao ban tuyên truyền hàng ngày')}</span></div>
         <div class="info-item"><span class="info-label">Thời gian</span><span class="info-value">${m.StartTime || '08:00'}${m.EndTime ? ' - ' + m.EndTime : ''}, ${formatDbDateVi(m.MeetingDate)}</span></div>
         <div class="info-item"><span class="info-label">Địa điểm</span><span class="info-value">${m.Location || '---'}</span></div>
         <div class="info-item"><span class="info-label">Chủ trì</span><span class="info-value">${m.Chairman || '---'}${m.ChairmanTitle ? ', ' + m.ChairmanTitle : ''}</span></div>
@@ -1064,93 +1203,113 @@ function renderMeetingDetail(meeting, reports, directives) {
         infoHtml += `<div class="info-item mb-4" style="background:var(--bg-card);padding:10px 14px;border:1px solid var(--border-color);border-radius:var(--radius-sm);"><span class="info-label">Thành phần tham dự</span><span class="info-value" style="font-size:0.84rem;line-height:1.6">${escapeHtml(m.Attendees)}</span></div>`;
     }
 
-    // II.1 Báo cáo nội dung
-    const noiDungReports = reports.filter(r => r.Category === 'noi_dung');
-    const dieuHanhReports = reports.filter(r => r.Category === 'dieu_hanh');
+    const deletedCats = (m.DeletedCategories || '').split(',').map(c => c.trim()).filter(Boolean);
 
-    let reportsHtml = '';
-    
-    // Nội dung & Tuyên truyền
-    reportsHtml += `<div class="content-section-title"><span class="num">II.1</span> Công tác nội dung và tuyên truyền</div>`;
-    if (noiDungReports.length > 0) {
-        noiDungReports.forEach(r => {
-            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
-        });
-    } else {
-        reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
-    }
-
-    // II.2 Điều hành chung
-    reportsHtml += `<div class="content-section-title mt-4"><span class="num">II.2</span> Báo cáo công tác điều hành chung</div>`;
-    if (dieuHanhReports.length > 0) {
-        dieuHanhReports.forEach(r => {
-            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
-        });
-    } else {
-        reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
-    }
-
+    // Xây dựng danh sách các đề mục Báo cáo (Phần II)
+    const allReportCategories = [
+        { key: 'noi_dung', title: 'Công tác nội dung và tuyên truyền' },
+        { key: 'dieu_hanh', title: 'Báo cáo công tác điều hành chung' }
+    ];
     // Các đề mục báo cáo khác (tùy chỉnh)
-    const customReportCategories = [];
     reports.forEach(r => {
         const cat = (r.Category || '').trim();
-        if (cat && cat !== 'noi_dung' && cat !== 'dieu_hanh' && !customReportCategories.includes(cat)) {
-            customReportCategories.push(cat);
+        if (cat && cat !== 'noi_dung' && cat !== 'dieu_hanh' && !allReportCategories.some(c => c.key === cat)) {
+            allReportCategories.push({ key: cat, title: cat });
         }
     });
 
-    customReportCategories.forEach((catName, idx) => {
-        const catReports = reports.filter(r => (r.Category || '').trim() === catName);
-        reportsHtml += `<div class="content-section-title mt-4"><span class="num">II.${idx + 3}</span> ${escapeHtml(catName)}</div>`;
-        catReports.forEach(r => {
-            reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
-        });
-    });
+    // Lọc bỏ các đề mục đã bị xóa khỏi cuộc họp này
+    const activeReportCategories = allReportCategories.filter(c => !deletedCats.includes(c.key));
 
-    // III. Ý kiến Ban TGĐ
-    const yKienTgd = directives.filter(d => d.Category === 'y_kien_tgd');
-    let yKienHtml = `<div class="content-section-title mt-4"><span class="num">III</span> Ý kiến của Ban Tổng Giám đốc</div>`;
-    if (yKienTgd.length > 0) {
-        yKienTgd.forEach(d => {
-            yKienHtml += renderDirectiveItem(d, m.MeetingID);
-        });
+    let reportsHtml = '';
+    if (activeReportCategories.length === 0) {
+        reportsHtml = `
+            <div class="content-section-title flex justify-between items-center">
+                <div><span class="num">II</span> Báo cáo của các đơn vị</div>
+            </div>
+            <p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có đề mục báo cáo nào</p>
+        `;
     } else {
-        yKienHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có ý kiến nào</p>`;
+        activeReportCategories.forEach((catObj, idx) => {
+            const numStr = `II.${idx + 1}`;
+            const catReports = reports.filter(r => (r.Category || '').trim() === catObj.key);
+            const count = catReports.length;
+
+            const deleteBtnHtml = canManage ? `
+                <button type="button" class="btn-delete-section" title="Xóa đề mục này" onclick="confirmDeleteCategory(${m.MeetingID}, 'report', '${escapeHtml(catObj.key)}', '${escapeHtml(catObj.title)}', ${count})">
+                    ✕ Xóa đề mục
+                </button>
+            ` : '';
+
+            reportsHtml += `
+            <div class="content-section-title ${idx > 0 ? 'mt-4' : ''} flex justify-between items-center">
+                <div><span class="num">${numStr}</span> ${escapeHtml(catObj.title)}</div>
+                ${deleteBtnHtml}
+            </div>`;
+
+            if (count > 0) {
+                catReports.forEach(r => {
+                    reportsHtml += renderReportItem(r, m.MeetingID, m.Status);
+                });
+            } else {
+                reportsHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có báo cáo nào</p>`;
+            }
+        });
     }
 
-    // IV. Kết luận cuộc họp
-    const ketLuan = directives.filter(d => d.Category === 'ket_luan');
-    let ketLuanHtml = `<div class="content-section-title mt-4"><span class="num">IV</span> Kết luận cuộc họp</div>`;
-    if (ketLuan.length > 0) {
-        ketLuan.forEach(d => {
-            ketLuanHtml += renderDirectiveItem(d, m.MeetingID);
-        });
-    } else {
-        ketLuanHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có kết luận nào</p>`;
-    }
-
-    // Các đề mục chỉ đạo / kết luận khác (tùy chỉnh)
-    const romanNumerals = ['V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
-    const customDirectiveCategories = [];
+    // Xây dựng danh sách các đề mục Chỉ đạo / Kết luận (Phần III trở đi)
+    const allDirectiveCategories = [
+        { key: 'y_kien_tgd', title: 'Ý kiến của Ban Tổng Giám đốc' },
+        { key: 'ket_luan', title: 'Kết luận cuộc họp' }
+    ];
     directives.forEach(d => {
         const cat = (d.Category || '').trim();
-        if (cat && cat !== 'y_kien_tgd' && cat !== 'ket_luan' && !customDirectiveCategories.includes(cat)) {
-            customDirectiveCategories.push(cat);
+        if (cat && cat !== 'y_kien_tgd' && cat !== 'ket_luan' && !allDirectiveCategories.some(c => c.key === cat)) {
+            allDirectiveCategories.push({ key: cat, title: cat });
         }
     });
 
-    let customDirectivesHtml = '';
-    customDirectiveCategories.forEach((catName, idx) => {
-        const romanNum = romanNumerals[idx] || `${idx + 5}`;
-        const catDirectives = directives.filter(d => (d.Category || '').trim() === catName);
-        customDirectivesHtml += `
+    const activeDirectiveCategories = allDirectiveCategories.filter(c => !deletedCats.includes(c.key));
+    const romanNumerals = ['III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
+
+    let directivesHtml = '';
+    if (activeDirectiveCategories.length === 0) {
+        directivesHtml = `
         <div class="meeting-content-section">
-            <div class="content-section-title mt-4"><span class="num">${romanNum}</span> ${escapeHtml(catName)}</div>`;
-        catDirectives.forEach(d => {
-            customDirectivesHtml += renderDirectiveItem(d, m.MeetingID);
+            <div class="content-section-title flex justify-between items-center">
+                <div><span class="num">III</span> Chỉ đạo và Kết luận cuộc họp</div>
+            </div>
+            <p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có chỉ đạo hoặc kết luận nào</p>
+        </div>`;
+    } else {
+        activeDirectiveCategories.forEach((catObj, idx) => {
+            const romanNum = romanNumerals[idx] || `${idx + 3}`;
+            const catDirectives = directives.filter(d => (d.Category || '').trim() === catObj.key);
+            const count = catDirectives.length;
+
+            const deleteBtnHtml = canManage ? `
+                <button type="button" class="btn-delete-section" title="Xóa đề mục này" onclick="confirmDeleteCategory(${m.MeetingID}, 'directive', '${escapeHtml(catObj.key)}', '${escapeHtml(catObj.title)}', ${count})">
+                    ✕ Xóa đề mục
+                </button>
+            ` : '';
+
+            directivesHtml += `
+            <div class="meeting-content-section">
+                <div class="content-section-title flex justify-between items-center">
+                    <div><span class="num">${romanNum}</span> ${escapeHtml(catObj.title)}</div>
+                    ${deleteBtnHtml}
+                </div>`;
+
+            if (count > 0) {
+                catDirectives.forEach(d => {
+                    directivesHtml += renderDirectiveItem(d, m.MeetingID);
+                });
+            } else {
+                directivesHtml += `<p class="text-muted" style="padding:8px 16px;font-size:0.84rem">Chưa có nội dung nào</p>`;
+            }
+            directivesHtml += `</div>`;
         });
-        customDirectivesHtml += `</div>`;
-    });
+    }
 
     // Action buttons
     let actionsHtml = '';
@@ -1191,15 +1350,47 @@ function renderMeetingDetail(meeting, reports, directives) {
         <div class="meeting-content-section">
             ${reportsHtml}
         </div>
-        <div class="meeting-content-section">
-            ${yKienHtml}
-        </div>
-        <div class="meeting-content-section">
-            ${ketLuanHtml}
-        </div>
-        ${customDirectivesHtml}
+        ${directivesHtml}
         ${actionsHtml}
     `;
+}
+
+async function confirmDeleteCategory(meetingId, sectionType, categoryKey, categoryTitle, count) {
+    let msg = `Bạn có chắc muốn xóa đề mục "${categoryTitle}" khỏi cuộc họp này không?`;
+    if (count > 0) {
+        msg = `Đề mục "${categoryTitle}" hiện đang có ${count} nội dung.\n\nXóa đề mục sẽ XÓA TOÀN BỘ ${count} nội dung bên trong!\n\nBạn có chắc chắn muốn tiếp tục không?`;
+    }
+    if (!confirm(msg)) return;
+
+    try {
+        const resp = await fetch(`/api/meetings/${meetingId}/categories/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ section_type: sectionType, category: categoryKey })
+        });
+        const res = await resp.json();
+        if (!resp.ok) {
+            showToast(res.detail || 'Lỗi xóa đề mục', 'error');
+            return;
+        }
+        showToast(`Đã xóa đề mục "${categoryTitle}"`, 'success');
+        
+        // Tải lại chi tiết cuộc họp ngay lập tức
+        const body = document.getElementById(`meeting-body-${meetingId}`);
+        if (body) {
+            const [meetingResp, reportsResp, directivesResp] = await Promise.all([
+                fetch(`/api/meetings/${meetingId}`),
+                fetch(`/api/meetings/${meetingId}/reports`),
+                fetch(`/api/meetings/${meetingId}/directives`)
+            ]);
+            const meeting = await meetingResp.json();
+            const reports = await reportsResp.json();
+            const directives = await directivesResp.json();
+            body.innerHTML = renderMeetingDetail(meeting, reports, directives);
+        }
+    } catch (e) {
+        showToast('Lỗi kết nối khi xóa đề mục', 'error');
+    }
 }
 
 function renderReportItem(r, meetingId, meetingStatus) {
@@ -1210,7 +1401,15 @@ function renderReportItem(r, meetingId, meetingStatus) {
 
     // Không hiển thị tiêu đề nếu Department là "Không đơn vị" hoặc rỗng
     const hasDept = r.Department && r.Department.trim() && r.Department.trim().toLowerCase() !== 'không đơn vị';
-    const deptHtml = hasDept ? `<span class="report-dept">${escapeHtml(r.Department)}</span>` : `<span></span>`;
+    let deptHtml = '<span></span>';
+    if (hasDept) {
+        const depts = r.Department.split(/[,;]/).map(d => d.trim()).filter(Boolean);
+        if (depts.length > 1) {
+            deptHtml = `<div class="flex flex-wrap gap-1 items-center">${depts.map(d => `<span class="report-dept" style="margin-right:2px;">${escapeHtml(d)}</span>`).join('')}</div>`;
+        } else {
+            deptHtml = `<span class="report-dept">${escapeHtml(r.Department)}</span>`;
+        }
+    }
 
     return `
     <div class="report-item">
@@ -1253,6 +1452,9 @@ function renderDirectiveItem(d, meetingId) {
 // ===================== MEETING CRUD =====================
 async function openMeetingModal(meetingId) {
     document.getElementById('meetingFormId').value = '';
+    if (document.getElementById('mfMeetingType')) {
+        document.getElementById('mfMeetingType').value = 'Họp giao ban tuyên truyền hàng ngày';
+    }
     document.getElementById('mfDate').value = '';
     document.getElementById('mfStartTime').value = '08:00';
     document.getElementById('mfEndTime').value = '08:30';
@@ -1269,6 +1471,9 @@ async function openMeetingModal(meetingId) {
             const resp = await fetch(`/api/meetings/${meetingId}`);
             const m = await resp.json();
             document.getElementById('meetingFormId').value = m.MeetingID;
+            if (document.getElementById('mfMeetingType')) {
+                document.getElementById('mfMeetingType').value = m.MeetingType || 'Họp giao ban tuyên truyền hàng ngày';
+            }
             document.getElementById('mfDate').value = m.MeetingDate || '';
             document.getElementById('mfStartTime').value = m.StartTime || '08:00';
             document.getElementById('mfEndTime').value = m.EndTime || '08:30';
@@ -1281,6 +1486,9 @@ async function openMeetingModal(meetingId) {
         } catch (e) { showToast('Lỗi tải thông tin', 'error'); }
     } else {
         document.getElementById('meetingModalTitle').textContent = 'Tạo cuộc họp mới';
+        if (document.getElementById('mfMeetingType')) {
+            document.getElementById('mfMeetingType').value = 'Họp giao ban tuyên truyền hàng ngày';
+        }
         document.getElementById('mfDate').value = toDbDate(new Date());
         document.getElementById('mfStartTime').value = '08:00';
         document.getElementById('mfEndTime').value = '08:30';
@@ -1291,7 +1499,9 @@ async function openMeetingModal(meetingId) {
 
 async function handleMeetingSubmit() {
     const meetingId = document.getElementById('meetingFormId').value;
+    const meetingTypeEl = document.getElementById('mfMeetingType');
     const data = {
+        meetingType: (meetingTypeEl ? meetingTypeEl.value.trim() : '') || 'Họp giao ban tuyên truyền hàng ngày',
         meetingDate: document.getElementById('mfDate').value,
         startTime: document.getElementById('mfStartTime').value,
         endTime: document.getElementById('mfEndTime').value,
@@ -1376,7 +1586,24 @@ async function deleteMeeting(meetingId, meetingDate = '') {
 function openReportModal(meetingId, report) {
     document.getElementById('rfMeetingId').value = meetingId;
     document.getElementById('rfReportId').value = report ? report.ReportID : '';
-    document.getElementById('rfDepartment').value = report ? report.Department : (currentUser ? (currentUser.department || '') : '');
+
+    const deptContainer = document.getElementById('rfDeptList');
+    if (deptContainer) {
+        deptContainer.innerHTML = '';
+        if (report && report.Department) {
+            const depts = report.Department.split(/[,;]/).map(d => d.trim()).filter(Boolean);
+            if (depts.length > 0) {
+                depts.forEach((d, idx) => {
+                    addReportDeptRow('rfDeptList', d, idx === 0);
+                });
+            } else {
+                addReportDeptRow('rfDeptList', report.Department, true);
+            }
+        } else {
+            const defaultDept = currentUser ? (currentUser.department || '') : '';
+            addReportDeptRow('rfDeptList', defaultDept, true);
+        }
+    }
 
     const catSelect = document.getElementById('rfCategory');
     const customWrap = document.getElementById('rfCategoryCustomWrap');
@@ -1428,16 +1655,34 @@ async function handleReportSubmit() {
         }
     }
 
-    const data = {
-        department: document.getElementById('rfDepartment').value,
-        category: category,
-        content: document.getElementById('rfContent').value.trim()
-    };
+    // Lấy tất cả các đơn vị đã chọn từ rfDeptList
+    const deptSelects = document.querySelectorAll('#rfDeptList .rf-dept-select');
+    const selectedDepts = [];
+    deptSelects.forEach(sel => {
+        const val = sel.value.trim();
+        if (val && !selectedDepts.includes(val)) {
+            selectedDepts.push(val);
+        }
+    });
 
-    if (!data.department || !data.content) {
-        showToast('Vui lòng chọn đơn vị và nhập nội dung', 'warning');
+    if (selectedDepts.length === 0) {
+        showToast('Vui lòng chọn ít nhất một đơn vị báo cáo', 'warning');
         return;
     }
+
+    const department = selectedDepts.join(', ');
+    const content = document.getElementById('rfContent').value.trim();
+
+    if (!content) {
+        showToast('Vui lòng nhập nội dung báo cáo', 'warning');
+        return;
+    }
+
+    const data = {
+        department: department,
+        category: category,
+        content: content
+    };
 
     try {
         const url = reportId 
