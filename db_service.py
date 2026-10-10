@@ -309,6 +309,46 @@ def init_db():
                 "INSERT INTO Users (Username, Password, Role, Department, IsNew) VALUES ('admin', 'KTphtl', 'Admin', N'Văn phòng Đài', 0)"
             )
 
+        # Cập nhật chuyển đổi tên Ban theo cơ cấu tổ chức mới:
+        # - Ban Chiến lược -> Ban Chiến lược - Đầu tư
+        # - Ban Chuyên đề / Ban Khoa giáo -> Ban Chuyên đề - Khoa giáo
+        dept_migrations = [
+            "UPDATE Users SET Department = N'Ban Chiến lược - Đầu tư' WHERE Department = N'Ban Chiến lược' OR (Department LIKE N'%Ban Chiến lược%' AND Department NOT LIKE N'%Đầu tư%')",
+            "UPDATE Users SET Department = N'Ban Chuyên đề - Khoa giáo' WHERE Department IN (N'Ban Chuyên đề', N'Ban Khoa giáo') OR (Department LIKE N'%Ban Chuyên đề%' AND Department NOT LIKE N'%Khoa giáo%')",
+            "UPDATE MeetingReports SET Department = REPLACE(Department, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE Department LIKE N'%Ban Chiến lược%' AND Department NOT LIKE N'%Đầu tư%'",
+            "UPDATE MeetingReports SET Department = REPLACE(Department, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Chuyên đề%' AND Department NOT LIKE N'%Khoa giáo%'",
+            "UPDATE MeetingReports SET Department = REPLACE(Department, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Khoa giáo%'",
+            "UPDATE Directives SET AssignedTo = REPLACE(AssignedTo, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE AssignedTo LIKE N'%Ban Chiến lược%' AND AssignedTo NOT LIKE N'%Đầu tư%'",
+            "UPDATE Directives SET AssignedTo = REPLACE(AssignedTo, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE AssignedTo LIKE N'%Ban Chuyên đề%' AND AssignedTo NOT LIKE N'%Khoa giáo%'",
+            "UPDATE Directives SET AssignedTo = REPLACE(AssignedTo, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE AssignedTo LIKE N'%Ban Khoa giáo%'",
+            "UPDATE Directives SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE CooperatingUnit LIKE N'%Ban Chiến lược%' AND CooperatingUnit NOT LIKE N'%Đầu tư%'",
+            "UPDATE Directives SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE CooperatingUnit LIKE N'%Ban Chuyên đề%' AND CooperatingUnit NOT LIKE N'%Khoa giáo%'",
+            "UPDATE Directives SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE CooperatingUnit LIKE N'%Ban Khoa giáo%'",
+            "UPDATE PropagandaPlans SET ExecutingUnit = REPLACE(ExecutingUnit, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE ExecutingUnit LIKE N'%Ban Chiến lược%' AND ExecutingUnit NOT LIKE N'%Đầu tư%'",
+            "UPDATE PropagandaPlans SET ExecutingUnit = REPLACE(ExecutingUnit, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE ExecutingUnit LIKE N'%Ban Chuyên đề%' AND ExecutingUnit NOT LIKE N'%Khoa giáo%'",
+            "UPDATE PropagandaPlans SET ExecutingUnit = REPLACE(ExecutingUnit, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE ExecutingUnit LIKE N'%Ban Khoa giáo%'",
+            "UPDATE PropagandaPlans SET AssignedUnit = REPLACE(AssignedUnit, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE AssignedUnit LIKE N'%Ban Chiến lược%' AND AssignedUnit NOT LIKE N'%Đầu tư%'",
+            "UPDATE PropagandaPlans SET AssignedUnit = REPLACE(AssignedUnit, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE AssignedUnit LIKE N'%Ban Chuyên đề%' AND AssignedUnit NOT LIKE N'%Khoa giáo%'",
+            "UPDATE PropagandaPlans SET AssignedUnit = REPLACE(AssignedUnit, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE AssignedUnit LIKE N'%Ban Khoa giáo%'",
+            "UPDATE PropagandaPlans SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE CooperatingUnit LIKE N'%Ban Chiến lược%' AND CooperatingUnit NOT LIKE N'%Đầu tư%'",
+            "UPDATE PropagandaPlans SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE CooperatingUnit LIKE N'%Ban Chuyên đề%' AND CooperatingUnit NOT LIKE N'%Khoa giáo%'",
+            "UPDATE PropagandaPlans SET CooperatingUnit = REPLACE(CooperatingUnit, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE CooperatingUnit LIKE N'%Ban Khoa giáo%'",
+            "UPDATE SharedDocuments SET Department = REPLACE(Department, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE Department LIKE N'%Ban Chiến lược%' AND Department NOT LIKE N'%Đầu tư%'",
+            "UPDATE SharedDocuments SET Department = REPLACE(Department, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Chuyên đề%' AND Department NOT LIKE N'%Khoa giáo%'",
+            "UPDATE SharedDocuments SET Department = REPLACE(Department, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Khoa giáo%'",
+            "UPDATE Banners SET Department = REPLACE(Department, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE Department LIKE N'%Ban Chiến lược%' AND Department NOT LIKE N'%Đầu tư%'",
+            "UPDATE Banners SET Department = REPLACE(Department, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Chuyên đề%' AND Department NOT LIKE N'%Khoa giáo%'",
+            "UPDATE Banners SET Department = REPLACE(Department, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Khoa giáo%'",
+            "UPDATE DirectiveComments SET Department = REPLACE(Department, N'Ban Chiến lược', N'Ban Chiến lược - Đầu tư') WHERE Department LIKE N'%Ban Chiến lược%' AND Department NOT LIKE N'%Đầu tư%'",
+            "UPDATE DirectiveComments SET Department = REPLACE(Department, N'Ban Chuyên đề', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Chuyên đề%' AND Department NOT LIKE N'%Khoa giáo%'",
+            "UPDATE DirectiveComments SET Department = REPLACE(Department, N'Ban Khoa giáo', N'Ban Chuyên đề - Khoa giáo') WHERE Department LIKE N'%Ban Khoa giáo%'",
+        ]
+        for query in dept_migrations:
+            try:
+                cursor.execute(query)
+            except Exception:
+                pass
+
         conn.commit()
 
         # Tự động di chuyển dữ liệu từ SQLite (nếu có)
