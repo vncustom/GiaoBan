@@ -93,6 +93,83 @@ def rows_to_dict_list(cursor, rows) -> List[Dict[str, Any]]:
     return [{cols[i]: r[i] for i in range(len(cols))} for r in rows]
 
 
+def normalize_department_token(d: str) -> str:
+    """Chuẩn hóa 1 tên đơn vị theo cơ cấu tổ chức mới nhất."""
+    if not d:
+        return ""
+    d = d.strip()
+    if d in ["Ban Chuyên đề", "Ban Khoa giáo", "Chuyên đề", "Khoa giáo"]:
+        return "Ban Chuyên đề - Khoa giáo"
+    if d in ["Ban Chiến lược", "Chiến lược"]:
+        return "Ban Chiến lược - Đầu tư"
+    if d in ["Ban Kỹ thuật cơ điện lạnh", "Kỹ thuật cơ điện lạnh"]:
+        return ""
+    if d == "Ban Chiến lược – Đầu tư":
+        return "Ban Chiến lược - Đầu tư"
+    if d == "Ban Chuyên đề – Khoa giáo":
+        return "Ban Chuyên đề - Khoa giáo"
+    return d
+
+
+def clean_department_list(val: str) -> str:
+    """Tách danh sách đơn vị từ chuỗi (phân cách bởi dấu phẩy), chuẩn hóa và loại bỏ trùng lặp."""
+    if not val:
+        return val
+    tokens = [t.strip() for t in val.replace(";", ",").split(",") if t.strip()]
+    cleaned = []
+    seen = set()
+    for t in tokens:
+        norm = normalize_department_token(t)
+        if norm and norm.lower() not in seen:
+            seen.add(norm.lower())
+            cleaned.append(norm)
+    return ", ".join(cleaned)
+
+
+def _cleanup_and_deduplicate_departments(conn):
+    """Quét và làm sạch, chuẩn hóa, loại bỏ trùng lặp đơn vị trong toàn bộ CSDL."""
+    try:
+        cursor = conn.cursor()
+        # Directives
+        cursor.execute("SELECT DirectiveID, AssignedTo, CooperatingUnit FROM Directives")
+        for r in cursor.fetchall():
+            d_id, a_to, c_unit = r[0], r[1], r[2]
+            new_a = clean_department_list(a_to) if a_to else a_to
+            new_c = clean_department_list(c_unit) if c_unit else c_unit
+            if new_a != a_to or new_c != c_unit:
+                cursor.execute(
+                    "UPDATE Directives SET AssignedTo = ?, CooperatingUnit = ? WHERE DirectiveID = ?",
+                    (new_a, new_c, d_id),
+                )
+
+        # Các bảng khác
+        tables_to_clean = [
+            ("MeetingReports", "ReportID", ["Department"]),
+            ("PropagandaPlans", "PlanID", ["AssignedUnit", "CooperatingUnit", "ExecutingUnit", "Organizer"]),
+            ("SharedDocuments", "DocID", ["Department"]),
+            ("Banners", "BannerID", ["Department"]),
+            ("DirectiveComments", "CommentID", ["Department"]),
+            ("Users", "UserID", ["Department"]),
+        ]
+        for t, id_col, cols in tables_to_clean:
+            cols_str = ", ".join([id_col] + cols)
+            cursor.execute(f"SELECT {cols_str} FROM {t}")
+            for r in cursor.fetchall():
+                row_id = r[0]
+                updates = {}
+                for idx, col in enumerate(cols):
+                    old_val = r[idx + 1]
+                    if old_val:
+                        new_val = clean_department_list(old_val)
+                        if new_val != old_val:
+                            updates[col] = new_val
+                if updates:
+                    set_str = ", ".join([f"{c} = ?" for c in updates.keys()])
+                    cursor.execute(f"UPDATE {t} SET {set_str} WHERE {id_col} = ?", list(updates.values()) + [row_id])
+    except Exception as e:
+        print(f"[DB CLEANUP WARN] _cleanup_and_deduplicate_departments error: {e}")
+
+
 def init_db():
     """Khởi tạo cấu trúc các bảng trong cơ sở dữ liệu SQL Server nếu chưa có."""
     conn = None
@@ -348,6 +425,9 @@ def init_db():
                 cursor.execute(query)
             except Exception:
                 pass
+
+        # Quét và chuẩn hóa, loại bỏ tag trùng lặp
+        _cleanup_and_deduplicate_departments(conn)
 
         conn.commit()
 
@@ -1042,11 +1122,22 @@ def get_directives_filtered(
             query += " AND COALESCE(m.MeetingDate, d.DirectiveDate) <= ?"
             params.append(end_date)
         if department and department.strip():
-            query += " AND (d.AssignedTo LIKE ? OR d.AssignedTo = ? OR d.CooperatingUnit LIKE ? OR d.CooperatingUnit = ?)"
-            params.append(f"%{department.strip()}%")
-            params.append(department.strip())
-            params.append(f"%{department.strip()}%")
-            params.append(department.strip())
+            dept_term = department.strip()
+            if dept_term in ["Ban Chuyên đề - Khoa giáo", "Ban Chuyên đề", "Ban Khoa giáo"]:
+                query += """ AND (
+                    d.AssignedTo LIKE N'%Chuyên đề%' OR d.AssignedTo LIKE N'%Khoa giáo%'
+                    OR d.CooperatingUnit LIKE N'%Chuyên đề%' OR d.CooperatingUnit LIKE N'%Khoa giáo%'
+                )"""
+            elif dept_term in ["Ban Chiến lược - Đầu tư", "Ban Chiến lược"]:
+                query += """ AND (
+                    d.AssignedTo LIKE N'%Chiến lược%' OR d.CooperatingUnit LIKE N'%Chiến lược%'
+                )"""
+            else:
+                query += " AND (d.AssignedTo LIKE ? OR d.AssignedTo = ? OR d.CooperatingUnit LIKE ? OR d.CooperatingUnit = ?)"
+                params.append(f"%{dept_term}%")
+                params.append(dept_term)
+                params.append(f"%{dept_term}%")
+                params.append(dept_term)
         if category and category.strip():
             query += " AND d.Category = ?"
             params.append(category.strip())

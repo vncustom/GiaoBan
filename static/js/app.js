@@ -71,17 +71,57 @@ const DEPARTMENT_OPTIONS = [
     { value: 'PTGĐ Trần Hoàng', label: 'PTGĐ Trần Hoàng' },
 ];
 
+// Chuẩn hóa tên đơn vị/ban theo cơ cấu tổ chức mới nhất
+function normalizeDepartmentName(dept) {
+    if (!dept) return '';
+    let d = dept.trim();
+    if (d === 'Ban Chuyên đề' || d === 'Ban Khoa giáo' || d === 'Chuyên đề' || d === 'Khoa giáo') {
+        return 'Ban Chuyên đề - Khoa giáo';
+    }
+    if (d === 'Ban Chiến lược' || d === 'Chiến lược') {
+        return 'Ban Chiến lược - Đầu tư';
+    }
+    if (d === 'Ban Kỹ thuật cơ điện lạnh' || d === 'Kỹ thuật cơ điện lạnh') {
+        return '';
+    }
+    if (d === 'Ban Chiến lược – Đầu tư') {
+        return 'Ban Chiến lược - Đầu tư';
+    }
+    if (d === 'Ban Chuyên đề – Khoa giáo') {
+        return 'Ban Chuyên đề - Khoa giáo';
+    }
+    return d;
+}
+
+// Tách danh sách đơn vị từ chuỗi (phân cách bởi dấu phẩy), chuẩn hóa và loại bỏ trùng lặp
+function deduplicateDepartments(deptString) {
+    if (!deptString || !deptString.trim()) return [];
+    const rawTokens = deptString.split(/[,;]/).map(u => u.trim()).filter(Boolean);
+    const result = [];
+    const seen = new Set();
+    rawTokens.forEach(token => {
+        const norm = normalizeDepartmentName(token);
+        if (norm && !seen.has(norm.toLowerCase())) {
+            seen.add(norm.toLowerCase());
+            result.push(norm);
+        }
+    });
+    return result;
+}
+
 function buildDepartmentOptionsHtml(selectedVal = '') {
+    const normSel = normalizeDepartmentName(selectedVal);
     return DEPARTMENT_OPTIONS.map(opt => {
-        const isSel = (opt.value && opt.value.toLowerCase() === (selectedVal || '').toLowerCase()) ? 'selected' : '';
+        const isSel = (opt.value && opt.value.toLowerCase() === (normSel || selectedVal || '').toLowerCase()) ? 'selected' : '';
         return `<option value="${escapeHtml(opt.value)}" ${isSel}>${escapeHtml(opt.label)}</option>`;
     }).join('');
 }
 
 function buildCoopOptionsHtml(selectedVal = '') {
+    const normSel = normalizeDepartmentName(selectedVal);
     const coopOpts = [{ value: '', label: '-- Không có đơn vị phối hợp --' }, ...DEPARTMENT_OPTIONS.slice(1)];
     return coopOpts.map(opt => {
-        const isSel = (opt.value && opt.value.toLowerCase() === (selectedVal || '').toLowerCase()) ? 'selected' : '';
+        const isSel = (opt.value && opt.value.toLowerCase() === (normSel || selectedVal || '').toLowerCase()) ? 'selected' : '';
         return `<option value="${escapeHtml(opt.value)}" ${isSel}>${escapeHtml(opt.label)}</option>`;
     }).join('');
 }
@@ -142,7 +182,8 @@ const REPORT_DEPARTMENT_OPTIONS = [
 ];
 
 function buildReportDepartmentOptionsHtml(selectedVal = '') {
-    const s = (selectedVal || '').trim().toLowerCase();
+    const norm = normalizeDepartmentName(selectedVal);
+    const s = (norm || selectedVal || '').trim().toLowerCase();
     return REPORT_DEPARTMENT_OPTIONS.map(opt => {
         const v = (opt.value || '').trim().toLowerCase();
         let isSel = '';
@@ -753,17 +794,17 @@ function renderDirectivePagination(totalPages, totalDates, totalItems) {
 function renderDirectiveBadges(assignedTo, cooperatingUnit) {
     let badges = '';
     
-    // Giao cho các đơn vị (Màu cam)
+    // Giao cho các đơn vị (Màu cam) - chuẩn hóa tên và lọc bỏ trùng lặp
     if (assignedTo && assignedTo.trim()) {
-        const units = assignedTo.split(',').map(u => u.trim()).filter(Boolean);
+        const units = deduplicateDepartments(assignedTo);
         units.forEach(u => {
             badges += `<span class="assigned-unit-badge">🏢 Giao: ${escapeHtml(u)}</span>`;
         });
     }
     
-    // Đơn vị phối hợp (Màu tím)
+    // Đơn vị phối hợp (Màu tím) - chuẩn hóa tên và lọc bỏ trùng lặp
     if (cooperatingUnit && cooperatingUnit.trim()) {
-        const coops = cooperatingUnit.split(',').map(u => u.trim()).filter(Boolean);
+        const coops = deduplicateDepartments(cooperatingUnit);
         coops.forEach(c => {
             badges += `<span class="coop-unit-badge">🤝 Phối hợp: ${escapeHtml(c)}</span>`;
         });
@@ -1587,13 +1628,13 @@ function openReportModal(meetingId, report) {
     if (deptContainer) {
         deptContainer.innerHTML = '';
         if (report && report.Department) {
-            const depts = report.Department.split(/[,;]/).map(d => d.trim()).filter(Boolean);
+            const depts = deduplicateDepartments(report.Department);
             if (depts.length > 0) {
                 depts.forEach((d, idx) => {
                     addReportDeptRow('rfDeptList', d, idx === 0);
                 });
             } else {
-                addReportDeptRow('rfDeptList', report.Department, true);
+                addReportDeptRow('rfDeptList', normalizeDepartmentName(report.Department) || report.Department, true);
             }
         } else {
             const defaultDept = currentUser ? (currentUser.department || '') : '';
@@ -1761,7 +1802,7 @@ function openDirectiveModal(meetingId, directive) {
         listContainer.innerHTML = '';
         const rawAssigned = directive ? (directive.AssignedTo || '') : '';
         if (rawAssigned) {
-            const units = rawAssigned.split(',').map(u => u.trim()).filter(Boolean);
+            const units = deduplicateDepartments(rawAssigned);
             if (units.length > 0) {
                 units.forEach(u => addAssignedUnitRow('dfAssignedList', 'df-assigned-select', u));
             } else {
@@ -1778,7 +1819,7 @@ function openDirectiveModal(meetingId, directive) {
         coopContainer.innerHTML = '';
         const rawCoop = directive ? (directive.CooperatingUnit || '') : '';
         if (rawCoop) {
-            const units = rawCoop.split(',').map(u => u.trim()).filter(Boolean);
+            const units = deduplicateDepartments(rawCoop);
             if (units.length > 0) {
                 units.forEach(u => addCoopUnitRow('dfCoopList', 'df-coop-select', u));
             } else {
@@ -1946,7 +1987,7 @@ function openStandaloneDirectiveModal(directive) {
         listContainer.innerHTML = '';
         const rawAssigned = directive ? (directive.AssignedTo || '') : '';
         if (rawAssigned) {
-            const units = rawAssigned.split(',').map(u => u.trim()).filter(Boolean);
+            const units = deduplicateDepartments(rawAssigned);
             if (units.length > 0) {
                 units.forEach(u => addAssignedUnitRow('sdAssignedList', 'sd-assigned-select', u));
             } else {
@@ -1963,7 +2004,7 @@ function openStandaloneDirectiveModal(directive) {
         coopContainer.innerHTML = '';
         const rawCoop = directive ? (directive.CooperatingUnit || '') : '';
         if (rawCoop) {
-            const units = rawCoop.split(',').map(u => u.trim()).filter(Boolean);
+            const units = deduplicateDepartments(rawCoop);
             if (units.length > 0) {
                 units.forEach(u => addCoopUnitRow('sdCoopList', 'sd-coop-select', u));
             } else {
