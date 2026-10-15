@@ -1630,6 +1630,7 @@ def api_get_shared_docs(
     request: Request,
     doc_type: Optional[str] = None,
     department: Optional[str] = None,
+    block: Optional[str] = None,
     search: Optional[str] = None,
     month: Optional[str] = None,
     date: Optional[str] = None,
@@ -1637,10 +1638,11 @@ def api_get_shared_docs(
     end_date: Optional[str] = None,
     limit: int = 100,
 ):
-    """Lấy danh sách văn bản chia sẻ. Hỗ trợ lọc theo hình thức, đơn vị, tháng, ngày."""
+    """Lấy danh sách văn bản chia sẻ. Hỗ trợ lọc theo khối, hình thức, đơn vị, tháng, ngày."""
     docs = db_service.get_shared_documents(
         doc_type=doc_type or None,
         department=department or None,
+        block=block or None,
         search=search or None,
         month=month or None,
         date=date or None,

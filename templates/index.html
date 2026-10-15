@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Ban HTV</title>
     <meta name="description" content="Hệ thống quản lý cuộc họp giao ban hằng ngày - Đài Phát thanh và Truyền hình Thành phố Hồ Chí Minh">
-    <link rel="stylesheet" href="/static/css/style.css?v=9">
+    <link rel="stylesheet" href="/static/css/style.css?v=16">
     <!-- Script chống flash trắng/đen khi load -->
     <script>
         (function() {
@@ -384,6 +384,29 @@
 
                 <!-- Thanh công cụ lọc đa chiều -->
                 <div class="sd-filters-card">
+                    <!-- Hàng 0: Filter KHỐI (Nằm trên filter Hình thức) -->
+                    <div class="sd-filter-row sd-block-row">
+                        <span class="filter-label">Khối:</span>
+                        <div class="sd-block-buttons">
+                            <button type="button" class="sd-block-btn active" data-sd-block="" id="sdBlockFilterAll">
+                                <span class="sd-block-dot"></span>
+                                <span>Tất cả khối</span>
+                            </button>
+                            <button type="button" class="sd-block-btn sd-block-noichinh" data-sd-block="Khối Nội chính - Dịch vụ">
+                                <span class="sd-block-dot"></span>
+                                <span>Khối Nội chính - Dịch vụ</span>
+                            </button>
+                            <button type="button" class="sd-block-btn sd-block-bientap" data-sd-block="Khối Biên tập">
+                                <span class="sd-block-dot"></span>
+                                <span>Khối Biên tập</span>
+                            </button>
+                            <button type="button" class="sd-block-btn sd-block-kythuat" data-sd-block="Khối Kỹ thuật">
+                                <span class="sd-block-dot"></span>
+                                <span>Khối Kỹ thuật</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Hàng 1: Hình thức văn bản -->
                     <div class="sd-filter-row sd-type-row">
                         <span class="filter-label">Hình thức:</span>
@@ -407,34 +430,42 @@
                             <span class="filter-label">Đơn vị / Ban:</span>
                             <select class="form-select" id="sdFilterDept" style="min-width: 210px; padding: 6px 10px; font-size: 0.85rem;">
                                 <option value="">-- Tất cả các Ban / Đơn vị --</option>
-                                <option value="Ban Chương trình">Ban Chương trình</option>
-                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                                <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                                <option value="Ban Chuyên đề - Khoa giáo">Ban Chuyên đề - Khoa giáo</option>
-                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                                <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
-                                <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                                <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                                <option value="Văn phòng">Văn phòng Đài</option>
-                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                                <option value="Ban Chiến lược - Đầu tư">Ban Chiến lược - Đầu tư</option>
-                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                                <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                                <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                                <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                                <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                                <option value="Công ty TMS">Công ty TMS</option>
-                                <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
-                                <option value="PTGĐ Thái Thành Chung">PTGĐ Thái Thành Chung</option>
-                                <option value="PTGĐ Diệp Bửu Chi">PTGĐ Diệp Bửu Chi</option>
-                                <option value="PTGĐ Trương Thanh Phong">PTGĐ Trương Thanh Phong</option>
-                                <option value="PTGĐ Nguyễn Thanh Quang">PTGĐ Nguyễn Thanh Quang</option>
-                                <option value="PTGĐ Nguyễn Quốc Bình">PTGĐ Nguyễn Quốc Bình</option>
-                                <option value="PTGĐ Trần Hoàng">PTGĐ Trần Hoàng</option>
+                                <optgroup label="Khối Nội chính - Dịch vụ" data-opt-block="Khối Nội chính - Dịch vụ">
+                                    <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                    <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                    <option value="Ban Chiến lược - Đầu tư">Ban Chiến lược - Đầu tư</option>
+                                    <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                    <option value="TT Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                                </optgroup>
+                                <optgroup label="Khối Biên tập" data-opt-block="Khối Biên tập">
+                                    <option value="Ban Chương trình">Ban Chương trình</option>
+                                    <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                    <option value="TT Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                    <option value="Ban Chuyên đề - Khoa giáo">Ban Chuyên đề - Khoa giáo</option>
+                                    <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                    <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                    <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
+                                    <option value="TT HTV Bình Dương">TT HTV Bình Dương</option>
+                                    <option value="TT HTV Bà Rịa">TT HTV Bà Rịa</option>
+                                </optgroup>
+                                <optgroup label="Khối Kỹ thuật" data-opt-block="Khối Kỹ thuật">
+                                    <option value="TT Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                    <option value="TT Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                    <option value="TT Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                    <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                                </optgroup>
+                                <optgroup label="Ban Giám đốc & Đơn vị khác" data-opt-block="Khác">
+                                    <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
+                                    <option value="PTGĐ Thái Thành Chung">PTGĐ Thái Thành Chung</option>
+                                    <option value="PTGĐ Diệp Bửu Chi">PTGĐ Diệp Bửu Chi</option>
+                                    <option value="PTGĐ Trương Thanh Phong">PTGĐ Trương Thanh Phong</option>
+                                    <option value="PTGĐ Nguyễn Thanh Quang">PTGĐ Nguyễn Thanh Quang</option>
+                                    <option value="PTGĐ Nguyễn Quốc Bình">PTGĐ Nguyễn Quốc Bình</option>
+                                    <option value="PTGĐ Trần Hoàng">PTGĐ Trần Hoàng</option>
+                                    <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                    <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                    <option value="Công ty TMS">Công ty TMS</option>
+                                </optgroup>
                             </select>
                         </div>
 
@@ -538,39 +569,47 @@
                         <label class="form-label" for="sdUploadDepartment">Đơn vị / Ban ban hành</label>
                         <select class="form-select" id="sdUploadDepartment" name="department">
                             <option value="">-- Theo tài khoản đăng nhập --</option>
-                            <option value="Ban Chương trình">Ban Chương trình</option>
-                            <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
-                            <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
-                            <option value="Trung tâm Phát triển nội dung số">TT Phát triển nội dung số</option>
-                            <option value="Ban Chuyên đề - Khoa giáo">Ban Chuyên đề - Khoa giáo</option>
-                            <option value="Ban Văn nghệ">Ban Văn nghệ</option>
-                            <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
-                            <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
-                            <option value="Trung tâm HTV Bình Dương">TT HTV Bình Dương</option>
-                            <option value="Trung tâm HTV Bà Rịa">TT HTV Bà Rịa</option>
-                            <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
-                            <option value="Văn phòng">Văn phòng Đài</option>
-                            <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
-                            <option value="Ban Chiến lược - Đầu tư">Ban Chiến lược - Đầu tư</option>
-                            <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
-                            <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
-                            <option value="Trung tâm Sản xuất chương trình">TT Sản xuất chương trình</option>
-                            <option value="Trung tâm Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
-                            <option value="Trung tâm Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
-                            <option value="Trung tâm Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
-                            <option value="Công ty TMS">Công ty TMS</option>
-                            <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
-                            <option value="PTGĐ Thái Thành Chung">PTGĐ Thái Thành Chung</option>
-                            <option value="PTGĐ Diệp Bửu Chi">PTGĐ Diệp Bửu Chi</option>
-                            <option value="PTGĐ Trương Thanh Phong">PTGĐ Trương Thanh Phong</option>
-                            <option value="PTGĐ Nguyễn Thanh Quang">PTGĐ Nguyễn Thanh Quang</option>
-                            <option value="PTGĐ Nguyễn Quốc Bình">PTGĐ Nguyễn Quốc Bình</option>
-                            <option value="PTGĐ Trần Hoàng">PTGĐ Trần Hoàng</option>
+                            <optgroup label="Khối Nội chính - Dịch vụ">
+                                <option value="Văn phòng Đài">Văn phòng Đài</option>
+                                <option value="Ban Tổ chức - Đào tạo">Ban Tổ chức - Đào tạo</option>
+                                <option value="Ban Chiến lược - Đầu tư">Ban Chiến lược - Đầu tư</option>
+                                <option value="Ban Kế hoạch - Tài chính">Ban Kế hoạch - Tài chính</option>
+                                <option value="TT Dịch vụ truyền thông">TT Dịch vụ truyền thông</option>
+                            </optgroup>
+                            <optgroup label="Khối Biên tập">
+                                <option value="Ban Chương trình">Ban Chương trình</option>
+                                <option value="Trung tâm Tin tức">Trung tâm Tin tức</option>
+                                <option value="TT Phát triển nội dung số">TT Phát triển nội dung số</option>
+                                <option value="Ban Chuyên đề - Khoa giáo">Ban Chuyên đề - Khoa giáo</option>
+                                <option value="Ban Văn nghệ">Ban Văn nghệ</option>
+                                <option value="Ban Thể dục Thể thao">Ban Thể dục Thể thao</option>
+                                <option value="Hãng phim Truyền hình">Hãng phim Truyền hình (TFS)</option>
+                                <option value="TT HTV Bình Dương">TT HTV Bình Dương</option>
+                                <option value="TT HTV Bà Rịa">TT HTV Bà Rịa</option>
+                            </optgroup>
+                            <optgroup label="Khối Kỹ thuật">
+                                <option value="TT Sản xuất chương trình">TT Sản xuất chương trình</option>
+                                <option value="TT Truyền dẫn Phát sóng">TT Truyền dẫn Phát sóng</option>
+                                <option value="TT Phát hình - Tư liệu">TT Phát hình - Tư liệu</option>
+                                <option value="Ban Kỹ thuật công nghệ">Ban Kỹ thuật công nghệ</option>
+                            </optgroup>
+                            <optgroup label="Ban Giám đốc & Đơn vị khác">
+                                <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
+                                <option value="PTGĐ Thái Thành Chung">PTGĐ Thái Thành Chung</option>
+                                <option value="PTGĐ Diệp Bửu Chi">PTGĐ Diệp Bửu Chi</option>
+                                <option value="PTGĐ Trương Thanh Phong">PTGĐ Trương Thanh Phong</option>
+                                <option value="PTGĐ Nguyễn Thanh Quang">PTGĐ Nguyễn Thanh Quang</option>
+                                <option value="PTGĐ Nguyễn Quốc Bình">PTGĐ Nguyễn Quốc Bình</option>
+                                <option value="PTGĐ Trần Hoàng">PTGĐ Trần Hoàng</option>
+                                <option value="Trung tâm Phát thanh">Trung tâm Phát thanh</option>
+                                <option value="Văn phòng Hà Nội">Văn phòng Hà Nội</option>
+                                <option value="Công ty TMS">Công ty TMS</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="sdUploadContent">Nội dung tóm tắt / mô tả</label>
-                        <textarea class="form-textarea" id="sdUploadContent" name="content" rows="4" placeholder="Mô tả nội dung văn bản (tùy chọn)..."></textarea>
+                        <label class="form-label" for="sdUploadContent">Nội dung</label>
+                        <textarea class="form-textarea" id="sdUploadContent" name="content" rows="4" placeholder="Nhập nội dung văn bản..."></textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Tệp đính kèm (PDF, DOCX, JPG, PNG &bull; Tối đa 25MB)</label>
@@ -1446,6 +1485,6 @@
         }
         window.toggleCategoryCustom = toggleCategoryCustom;
     </script>
-    <script src="/static/js/app.js?v=14"></script>
+    <script src="/static/js/app.js?v=16"></script>
 </body>
 </html>

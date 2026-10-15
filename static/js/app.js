@@ -225,11 +225,24 @@ document.addEventListener('DOMContentLoaded', () => {
     loadActiveBanners();
     updateHeroMonthLabel();
     loadHeroDirectives();
-    loadPropagandaPlans(true);
+    loadPropagandaPlans(false); // Không tự động cuộn xuống kế hoạch tuyên truyền
     loadEvents();
     loadMeetings();
     bindEvents();
     initSharedDocs();
+
+    // Mặc định con trỏ view trang giao ban là đầu trang chỉ đạo
+    const hash = window.location.hash;
+    if (!hash || hash === '#giaoban' || hash === '#heroSection' || hash === '#heroDirectives') {
+        setTimeout(() => {
+            const heroSection = document.getElementById('heroSection');
+            if (heroSection) {
+                heroSection.scrollIntoView({ behavior: 'auto', block: 'start' });
+            } else {
+                window.scrollTo({ top: 0, behavior: 'auto' });
+            }
+        }, 50);
+    }
 });
 
 // ===================== THEME TOGGLE (LIGHT / DARK) =====================
@@ -3550,7 +3563,12 @@ function switchMainView(viewName) {
         if (window.location.hash && window.location.hash !== '#giaoban') {
             try { history.pushState(null, '', '#giaoban'); } catch (e) { window.location.hash = '#giaoban'; }
         }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const heroSection = document.getElementById('heroSection');
+        if (heroSection) {
+            heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 }
 
@@ -3575,6 +3593,18 @@ function initRouting() {
 // SHARED DOCUMENTS - Văn bản chia sẻ giữa các Ban/Trung tâm
 // =====================================================================
 
+function truncateSDWords(text, maxWords = 50) {
+    if (!text) return { displayText: '', isTruncated: false };
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= maxWords) {
+        return { displayText: text.trim(), isTruncated: false };
+    }
+    return {
+        displayText: words.slice(0, maxWords).join(' ') + '...',
+        isTruncated: true
+    };
+}
+
 const SD_TYPE_MAP = {
     'Báo cáo':   { cls: 'sd-type-baocao',   emoji: '📈' },
     'Biên bản':  { cls: 'sd-type-bienban',  emoji: '📝' },
@@ -3597,6 +3627,7 @@ const FILE_ICON_MAP = {
 
 // Filter State
 let sdFilterState = {
+    block: '',         // 'Khối Nội chính - Dịch vụ' | 'Khối Biên tập' | 'Khối Kỹ thuật' | ''
     docType: '',
     department: '',
     month: '',         // e.g. '2026-10'
@@ -3606,6 +3637,116 @@ let sdFilterState = {
 };
 let sdSearchTimeout = null;
 let sdCurrentDocId = null;
+
+const SD_BLOCK_CONFIGS = [
+    {
+        name: 'Khối Kỹ thuật',
+        cls: 'sd-block-tag-kythuat',
+        label: 'Khối Kỹ thuật',
+        departments: [
+            'TT Sản xuất chương trình',
+            'Trung tâm Sản xuất chương trình',
+            'TT Truyền dẫn Phát sóng',
+            'Trung tâm Truyền dẫn Phát sóng',
+            'TT Phát hình - Tư liệu',
+            'Trung tâm Phát hình - Tư liệu',
+            'TTPHTL',
+            'Ban Kỹ thuật công nghệ'
+        ]
+    },
+    {
+        name: 'Khối Nội chính - Dịch vụ',
+        cls: 'sd-block-tag-noichinh',
+        label: 'Khối Nội chính - Dịch vụ',
+        departments: [
+            'Văn phòng Đài',
+            'Văn phòng',
+            'Văn phòng Hà Nội',
+            'Ban Tổ chức - Đào tạo',
+            'Ban Chiến lược - Đầu tư',
+            'Ban Kế hoạch - Tài chính',
+            'TT Dịch vụ truyền thông',
+            'Trung tâm Dịch vụ truyền thông'
+        ]
+    },
+    {
+        name: 'Khối Biên tập',
+        cls: 'sd-block-tag-bientap',
+        label: 'Khối Biên tập',
+        departments: [
+            'Ban Chương trình',
+            'Trung tâm Tin tức',
+            'TT Tin tức',
+            'TT Phát triển nội dung số',
+            'Trung tâm Phát triển nội dung số',
+            'Ban Chuyên đề - Khoa giáo',
+            'Ban Văn nghệ',
+            'Ban Thể dục Thể thao',
+            'Hãng phim Truyền hình (TFS)',
+            'Hãng phim Truyền hình',
+            'TFS',
+            'TT HTV Bình Dương',
+            'Trung tâm HTV Bình Dương',
+            'TT HTV Bà Rịa',
+            'Trung tâm HTV Bà Rịa'
+        ]
+    }
+];
+
+function getDepartmentBlockInfo(dept) {
+    if (!dept) return null;
+    const d = dept.trim().toLowerCase();
+    for (const b of SD_BLOCK_CONFIGS) {
+        for (const item of b.departments) {
+            const low = item.toLowerCase();
+            if (d === low || d.includes(low) || low.includes(d)) {
+                return b;
+            }
+        }
+    }
+    // Fallback checks
+    if (/kỹ thuật|sản xuất chương trình|truyền dẫn|phát hình|tư liệu|ttphtl/i.test(d)) {
+        return SD_BLOCK_CONFIGS[0];
+    }
+    if (/văn phòng|tổ chức|đào tạo|chiến lược|kế hoạch|tài chính|dịch vụ truyền thông/i.test(d)) {
+        return SD_BLOCK_CONFIGS[1];
+    }
+    if (/chương trình|tin tức|nội dung số|khoa giáo|văn nghệ|thể thao|tfs|hãng phim|bình dương|bà rịa/i.test(d)) {
+        return SD_BLOCK_CONFIGS[2];
+    }
+    return null;
+}
+
+function updateSDDeptOptionsForBlock(chosenBlock) {
+    const deptSelect = document.getElementById('sdFilterDept');
+    if (!deptSelect) return;
+    const optgroups = deptSelect.querySelectorAll('optgroup');
+    if (!chosenBlock) {
+        optgroups.forEach(og => og.style.display = '');
+        if (deptSelect.options.length > 0) {
+            deptSelect.options[0].textContent = '-- Tất cả các Ban / Đơn vị --';
+        }
+    } else {
+        optgroups.forEach(og => {
+            const blockAttr = og.getAttribute('data-opt-block');
+            if (blockAttr === chosenBlock) {
+                og.style.display = '';
+            } else {
+                og.style.display = 'none';
+            }
+        });
+        if (deptSelect.options.length > 0) {
+            deptSelect.options[0].textContent = `-- Tất cả đơn vị ${chosenBlock} --`;
+        }
+        if (sdFilterState.department) {
+            const currentOpt = deptSelect.querySelector(`option[value="${sdFilterState.department}"]`);
+            if (currentOpt && currentOpt.closest('optgroup') && currentOpt.closest('optgroup').getAttribute('data-opt-block') !== chosenBlock) {
+                deptSelect.value = '';
+                sdFilterState.department = '';
+            }
+        }
+    }
+}
 
 function sdFormatYearMonth(d) {
     if (!d) return '';
@@ -3696,29 +3837,58 @@ function renderSDCard(doc) {
     const deptDisplay = doc.Department || 'Chưa phân ban';
     const dateDisplay = sdFormatShortDate(doc.CreatedAt);
     const hasAttachment = !!doc.AttachmentPath;
+    const blockInfo = getDepartmentBlockInfo(doc.Department);
+
+    const blockBadgeHtml = blockInfo ? `
+        <span class="sd-card-block-badge ${blockInfo.cls}" title="${escapeHtml(blockInfo.label)}">
+            <span class="sd-block-badge-dot"></span>
+            <span>${escapeHtml(blockInfo.label)}</span>
+        </span>
+    ` : '';
+
+    const content = (doc.Content || '').trim();
+    let snippetHtml = '';
+    if (content) {
+        const { displayText, isTruncated } = truncateSDWords(content, 50);
+        snippetHtml = `
+        <div class="sd-item-snippet">
+            <span class="sd-snippet-text">${escapeHtml(displayText)}</span>
+            ${isTruncated ? '<span class="sd-snippet-more">Xem chi tiết ›</span>' : ''}
+        </div>`;
+    }
+
+    const attachBadgeHtml = hasAttachment ? `
+        <span class="sd-item-attach-badge" title="Tệp đính kèm: ${escapeHtml(doc.AttachmentName || '')}">
+            📎 ${escapeHtml(doc.AttachmentName || 'Tệp')}
+        </span>
+    ` : '';
 
     return `
     <div class="sd-list-item" onclick="openSDDetail(${doc.DocID})" data-doc-id="${doc.DocID}" title="Nhấp để xem chi tiết văn bản">
-        <div class="sd-item-left">
-            <span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType || 'Khác')}</span>
-            <div class="sd-item-title-wrap">
+        <div class="sd-item-top">
+            <div class="sd-item-left">
+                <span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType || 'Khác')}</span>
                 <span class="sd-item-title">${escapeHtml(doc.Title)}</span>
-                ${hasAttachment ? '<span class="sd-item-attach-icon" title="Có tệp đính kèm">📎</span>' : ''}
+                ${attachBadgeHtml}
+            </div>
+            <div class="sd-item-right">
+                ${blockBadgeHtml}
+                <span class="sd-item-dept" title="Đơn vị / Ban ban hành">🏛️ ${escapeHtml(deptDisplay)}</span>
+                <span class="sd-item-date">${dateDisplay}</span>
+                <span class="sd-item-arrow">›</span>
             </div>
         </div>
-        <div class="sd-item-right">
-            <span class="sd-item-dept" title="Đơn vị / Ban ban hành">🏛️ ${escapeHtml(deptDisplay)}</span>
-            <span class="sd-item-date">${dateDisplay}</span>
-            <span class="sd-item-arrow">›</span>
-        </div>
+        ${snippetHtml}
     </div>`;
 }
+
 
 async function loadSharedDocs() {
     const grid = document.getElementById('sdGrid');
     if (!grid) return;
     try {
         let url = '/api/shared-docs?limit=200';
+        if (sdFilterState.block) url += `&block=${encodeURIComponent(sdFilterState.block)}`;
         if (sdFilterState.docType) url += `&doc_type=${encodeURIComponent(sdFilterState.docType)}`;
         if (sdFilterState.department) url += `&department=${encodeURIComponent(sdFilterState.department)}`;
         if (sdFilterState.month) url += `&month=${encodeURIComponent(sdFilterState.month)}`;
@@ -3761,12 +3931,23 @@ async function openSDDetail(docId) {
         document.getElementById('sdDetailTitle').textContent = doc.Title || 'Văn bản chia sẻ';
 
         const info = sdTypeInfo(doc.DocType);
+        const blockInfo = getDepartmentBlockInfo(doc.Department);
         const metaEl = document.getElementById('sdDetailMeta');
         metaEl.innerHTML = `
             <div class="sd-detail-meta-item">
                 <span class="sd-detail-meta-label">Hình thức</span>
                 <span class="sd-detail-meta-value"><span class="sd-type-badge ${info.cls}">${escapeHtml(doc.DocType)}</span></span>
             </div>
+            ${blockInfo ? `
+            <div class="sd-detail-meta-item">
+                <span class="sd-detail-meta-label">Khối</span>
+                <span class="sd-detail-meta-value">
+                    <span class="sd-card-block-badge ${blockInfo.cls}">
+                        <span class="sd-block-badge-dot"></span>
+                        <span>${escapeHtml(blockInfo.label)}</span>
+                    </span>
+                </span>
+            </div>` : ''}
             <div class="sd-detail-meta-item">
                 <span class="sd-detail-meta-label">Đơn vị / Ban</span>
                 <span class="sd-detail-meta-value">${escapeHtml(doc.Department || 'Không rõ')}</span>
@@ -3982,6 +4163,18 @@ function initSharedDocs() {
     if (uploadBtn) {
         uploadBtn.addEventListener('click', openSDUploadModal);
     }
+
+    // Filter by Block (Khối)
+    document.querySelectorAll('[data-sd-block]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-sd-block]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const chosenBlock = btn.getAttribute('data-sd-block') || '';
+            sdFilterState.block = chosenBlock;
+            updateSDDeptOptionsForBlock(chosenBlock);
+            loadSharedDocs();
+        });
+    });
 
     // Filter by DocType
     document.querySelectorAll('[data-sd-type]').forEach(btn => {

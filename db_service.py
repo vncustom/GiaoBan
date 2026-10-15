@@ -1739,9 +1739,51 @@ def create_shared_document(
         conn.close()
 
 
+BLOCK_DEPT_MAP = {
+    "Khối Kỹ thuật": [
+        "TT Sản xuất chương trình",
+        "Trung tâm Sản xuất chương trình",
+        "TT Truyền dẫn Phát sóng",
+        "Trung tâm Truyền dẫn Phát sóng",
+        "TT Phát hình - Tư liệu",
+        "Trung tâm Phát hình - Tư liệu",
+        "TTPHTL",
+        "Ban Kỹ thuật công nghệ",
+    ],
+    "Khối Nội chính - Dịch vụ": [
+        "Văn phòng Đài",
+        "Văn phòng",
+        "Văn phòng Hà Nội",
+        "Ban Tổ chức - Đào tạo",
+        "Ban Chiến lược - Đầu tư",
+        "Ban Kế hoạch - Tài chính",
+        "TT Dịch vụ truyền thông",
+        "Trung tâm Dịch vụ truyền thông",
+    ],
+    "Khối Biên tập": [
+        "Ban Chương trình",
+        "Trung tâm Tin tức",
+        "TT Tin tức",
+        "TT Phát triển nội dung số",
+        "Trung tâm Phát triển nội dung số",
+        "Ban Chuyên đề - Khoa giáo",
+        "Ban Văn nghệ",
+        "Ban Thể dục Thể thao",
+        "Hãng phim Truyền hình (TFS)",
+        "Hãng phim Truyền hình",
+        "TFS",
+        "TT HTV Bình Dương",
+        "Trung tâm HTV Bình Dương",
+        "TT HTV Bà Rịa",
+        "Trung tâm HTV Bà Rịa",
+    ],
+}
+
+
 def get_shared_documents(
     doc_type: Optional[str] = None,
     department: Optional[str] = None,
+    block: Optional[str] = None,
     search: Optional[str] = None,
     month: Optional[str] = None,
     date: Optional[str] = None,
@@ -1750,7 +1792,7 @@ def get_shared_documents(
     limit: int = 200,
     offset: int = 0,
 ) -> List[Dict[str, Any]]:
-    """Lấy danh sách văn bản chia sẻ có hỗ trợ lọc theo hình thức, ban, ngày, tháng."""
+    """Lấy danh sách văn bản chia sẻ có hỗ trợ lọc theo khối, hình thức, ban, ngày, tháng."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1758,6 +1800,19 @@ def get_shared_documents(
             f"SELECT TOP ({int(limit)}) * FROM SharedDocuments WHERE 1=1"
         )
         params: List[Any] = []
+
+        if block and block.strip() in BLOCK_DEPT_MAP:
+            dept_items = BLOCK_DEPT_MAP[block.strip()]
+            block_clauses = []
+            for d in dept_items:
+                block_clauses.append("Department = ?")
+                params.append(d)
+                block_clauses.append("Department LIKE ?")
+                params.append(f"%{d}%")
+            if block.strip() == "Khối Biên tập":
+                query += f" AND ({' OR '.join(block_clauses)}) AND (Department NOT LIKE '%Sản xuất%')"
+            else:
+                query += f" AND ({' OR '.join(block_clauses)})"
 
         if doc_type and doc_type.strip():
             query += " AND DocType = ?"
